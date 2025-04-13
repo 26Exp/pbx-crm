@@ -1,35 +1,43 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Logoimg from './assets/profile.jpg';
-import apiService from './services/api';
+import { useAuth } from './contexts/AuthContext';
 import config from './config';
 
 const LoginPage = () => {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login: authLogin, isAuthenticated } = useAuth();
+  
+  // If user is already authenticated, redirect to home or the page they were trying to access
+  useEffect(() => {
+    if (isAuthenticated) {
+      const from = location.state?.from || '/';
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, location]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(''); // Reset any previous errors
+    setIsLoading(true);
 
     try {
-      const data = await apiService.auth.login({
+      // Use the authLogin method from our context
+      const result = await authLogin({
         email: login,
         password
       });
       
-      const { token, name, email } = data;
-
-      // Save the token to localStorage
-      localStorage.setItem(config.auth.tokenKey, token);
-
-      // Save user details
-      localStorage.setItem(config.auth.userKey, JSON.stringify({ name, email }));
-
-      // Redirect to the homepage
-      navigate('/');
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      
+      // Redirect will happen automatically via the useEffect watching isAuthenticated
     } catch (err) {
       // Handle different error scenarios based on error message
       if (err.message.includes('Unauthorized') || err.message.includes('401')) {
@@ -41,6 +49,8 @@ const LoginPage = () => {
       } else {
         setError('A apărut o eroare. Încercați din nou mai târziu.');
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -104,9 +114,12 @@ const LoginPage = () => {
 
         <button
           type="submit"
-          className="w-full bg-[#5046E5] text-white py-2 rounded-lg hover:bg-blue-600 transition duration-300"
+          className={`w-full bg-[#5046E5] text-white py-2 rounded-lg hover:bg-blue-600 transition duration-300 ${
+            isLoading ? 'opacity-70 cursor-not-allowed' : ''
+          }`}
+          disabled={isLoading}
         >
-          Intră în cont
+          {isLoading ? 'Se procesează...' : 'Intră în cont'}
         </button>
       </form>
     </div>

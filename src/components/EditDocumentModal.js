@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import apiService from '../services/api';
 import { getApiUrl, getAuthHeaders, fetchAllPages } from '../services/apiUtils';
 import config from '../config';
+import SearchableSelect from './SearchableSelect';
 
 const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, callId }) => {
   const [formData, setFormData] = useState({
@@ -58,11 +59,11 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
           apiService.refData.getServices(),
         ]);
 
-        setCities(citiesData || []);
-        setDomains(domainsData || []);
-        setBusinesses(businessesData || []);
-        setProducts(productsData || []);
-        setServices(servicesData || []);
+        setCities(formatSelectData(citiesData || []));
+        setDomains(formatSelectData(domainsData || []));
+        setBusinesses(formatSelectData(businessesData || []));
+        setProducts(formatSelectData(productsData?.data || productsData || []));
+        setServices(formatSelectData(servicesData || []));
       } catch (err) {
         console.error(err);
         setErrors(['Eroare la încărcarea datelor. Vă rugăm să încercați din nou.']);
@@ -110,6 +111,9 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
           : value,
     }));
   };
+  
+  // Track form field errors
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // Validate form data
   const validateForm = () => {
@@ -126,26 +130,66 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
     } = formData;
 
     const newErrors = [];
+    const fieldErrorsObj = {};
 
-    if (!numePrenume) newErrors.push('Vă rugăm să completați Nume și Prenume.');
-    if (!continutConsultatie) newErrors.push('Vă rugăm să selectați Domeniul Consultație.');
-    if (!dataApel) newErrors.push('Vă rugăm să selectați Data apelului.');
-    if (!localitate) newErrors.push('Vă rugăm să selectați Localitatea (CUATM).');
-    if (!formData.persFizica && !formData.persJuridica)
+    if (!numePrenume) {
+      newErrors.push('Vă rugăm să completați Nume și Prenume.');
+      fieldErrorsObj.numePrenume = true;
+    }
+    
+    if (!continutConsultatie) {
+      newErrors.push('Vă rugăm să selectați Domeniul Consultație.');
+      fieldErrorsObj.continutConsultatie = true;
+    }
+    
+    if (!dataApel) {
+      newErrors.push('Vă rugăm să selectați Data apelului.');
+      fieldErrorsObj.dataApel = true;
+    }
+    
+    if (!localitate) {
+      newErrors.push('Vă rugăm să selectați Localitatea (CUATM).');
+      fieldErrorsObj.localitate = true;
+    }
+    
+    if (!formData.persFizica && !formData.persJuridica) {
       newErrors.push('Vă rugăm să selectați tipul persoanei (Fizică sau Juridică).');
-    if (formData.persJuridica && !agentEconomic)
+      fieldErrorsObj.personType = true;
+    }
+    
+    if (formData.persJuridica && !agentEconomic) {
       newErrors.push('Vă rugăm să selectați Agent Economic pentru Persoană Juridică.');
-    if (!categorieProdus) newErrors.push('Vă rugăm să selectați Categorie Produs.');
-    if (!categorieServiciu) newErrors.push('Vă rugăm să selectați Categorie Serviciu.');
-    if (!detalii) newErrors.push('Vă rugăm să completați Detalii consultație.');
-    if (!status) newErrors.push('Vă rugăm să selectați Statusul.');
+      fieldErrorsObj.agentEconomic = true;
+    }
+    
+    if (!categorieProdus) {
+      newErrors.push('Vă rugăm să selectați Categorie Produs.');
+      fieldErrorsObj.categorieProdus = true;
+    }
+    
+    if (!categorieServiciu) {
+      newErrors.push('Vă rugăm să selectați Categorie Serviciu.');
+      fieldErrorsObj.categorieServiciu = true;
+    }
+    
+    if (!detalii) {
+      newErrors.push('Vă rugăm să completați Detalii consultație.');
+      fieldErrorsObj.detalii = true;
+    }
+    
+    if (!status) {
+      newErrors.push('Vă rugăm să selectați Statusul.');
+      fieldErrorsObj.status = true;
+    }
 
     if (newErrors.length > 0) {
       setErrors(newErrors);
+      setFieldErrors(fieldErrorsObj);
       return false;
     }
 
     setErrors([]);
+    setFieldErrors({});
     return true;
   };
 
@@ -164,11 +208,11 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
     // Map formData to API fields
     const mappedData = {
       call_id: documentData ? documentData.call_id : callId,
-      domain_id: parseInt(formData.continutConsultatie, 10),
-      city_id: parseInt(formData.localitate, 10),
-      business_id: formData.persJuridica ? parseInt(formData.agentEconomic, 10) : null,
-      product_id: parseInt(formData.categorieProdus, 10),
-      service_id: parseInt(formData.categorieServiciu, 10),
+      domain_id: formData.continutConsultatie ? parseInt(formData.continutConsultatie, 10) : null,
+      city_id: formData.localitate ? parseInt(formData.localitate, 10) : null,
+      business_id: formData.persJuridica && formData.agentEconomic ? parseInt(formData.agentEconomic, 10) : null,
+      product_id: formData.categorieProdus ? parseInt(formData.categorieProdus, 10) : null,
+      service_id: formData.categorieServiciu ? parseInt(formData.categorieServiciu, 10) : null,
       details: formData.detalii,
       status: parseInt(formData.status, 10),
       name: formData.numePrenume,
@@ -227,13 +271,14 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
     }
   };
 
-  // Render select options helper function
-  const renderSelectOptions = (dataArray) =>
-    dataArray.map((item) => (
-      <option key={item.id} value={item.id}>
-        {item.name}
-      </option>
-    ));
+  // Helper function to format data from API for select components
+  const formatSelectData = (dataArray) => {
+    if (!Array.isArray(dataArray)) return [];
+    return dataArray.map(item => ({
+      id: item.id,
+      name: item.name || item.title || item.label || 'Unnamed'
+    }));
+  };
 
   return (
     isOpen && (
@@ -289,26 +334,19 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
                     />
                   </div>
 
-                  {/* Domeniul Consultatie - select */}
+                  {/* Domeniul Consultatie - searchable select */}
                   <div>
-                    <label htmlFor="continutConsultatie" className="block mb-1">
-                      *Domeniul Consultație
-                    </label>
-                    <select
+                    <SearchableSelect
                       id="continutConsultatie"
                       name="continutConsultatie"
+                      options={domains}
                       value={formData.continutConsultatie}
                       onChange={handleChange}
-                      className="border rounded p-2 w-full"
-                      required
-                    >
-                      <option value="">Select...</option>
-                      {domains.length > 0 ? (
-                        renderSelectOptions(domains)
-                      ) : (
-                        <option disabled>Se încarcă...</option>
-                      )}
-                    </select>
+                      placeholder="Selectați domeniul..."
+                      label="*Domeniul Consultație"
+                      required={true}
+                      error={fieldErrors.continutConsultatie}
+                    />
                   </div>
 
                   {/* Data apelului */}
@@ -327,26 +365,19 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
                     />
                   </div>
 
-                  {/* Localitatea (CUATM) */}
+                  {/* Localitatea (CUATM) - searchable select */}
                   <div>
-                    <label htmlFor="localitate" className="block mb-1">
-                      *Localitatea (CUATM)
-                    </label>
-                    <select
+                    <SearchableSelect
                       id="localitate"
                       name="localitate"
+                      options={cities}
                       value={formData.localitate}
                       onChange={handleChange}
-                      className="border rounded p-2 w-full"
-                      required
-                    >
-                      <option value="">Select...</option>
-                      {cities.length > 0 ? (
-                        renderSelectOptions(cities)
-                      ) : (
-                        <option disabled>Se încarcă...</option>
-                      )}
-                    </select>
+                      placeholder="Selectați localitatea..."
+                      label="*Localitatea (CUATM)"
+                      required={true}
+                      error={fieldErrors.localitate}
+                    />
                   </div>
 
                   {/* Radio buttons for Person Type */}
@@ -444,24 +475,17 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
                 <div className="bg-sky-100 p-6 rounded-lg mb-6">
                   <h2 className="text-lg font-semibold mb-4">2. Agent Economic</h2>
                   <div>
-                    <label htmlFor="agentEconomic" className="block mb-1">
-                      *Agent economic Denumire / IDNO
-                    </label>
-                    <select
+                    <SearchableSelect
                       id="agentEconomic"
                       name="agentEconomic"
+                      options={businesses}
                       value={formData.agentEconomic}
                       onChange={handleChange}
-                      className="border rounded p-2 w-full"
-                      required
-                    >
-                      <option value="">Select...</option>
-                      {businesses.length > 0 ? (
-                        renderSelectOptions(businesses)
-                      ) : (
-                        <option disabled>Se încarcă...</option>
-                      )}
-                    </select>
+                      placeholder="Căutați după denumire sau IDNO..."
+                      label="*Agent economic Denumire / IDNO"
+                      required={true}
+                      error={fieldErrors.agentEconomic}
+                    />
                   </div>
                 </div>
               )}
@@ -470,48 +494,34 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
               <div className="bg-sky-100 p-6 rounded-lg">
                 <h2 className="text-lg font-semibold mb-4">3. Conținut Apel</h2>
                 <div className="grid grid-cols-1 gap-4">
-                  {/* Categorie Produs */}
+                  {/* Categorie Produs - searchable select */}
                   <div>
-                    <label htmlFor="categorieProdus" className="block mb-1">
-                      A. Produs
-                    </label>
-                    <select
+                    <SearchableSelect
                       id="categorieProdus"
                       name="categorieProdus"
+                      options={products}
                       value={formData.categorieProdus}
                       onChange={handleChange}
-                      className="border rounded p-2 w-full"
-                      required
-                    >
-                      <option value="">Select...</option>
-                      {products.length > 0 ? (
-                        renderSelectOptions(products)
-                      ) : (
-                        <option disabled>Se încarcă...</option>
-                      )}
-                    </select>
+                      placeholder="Căutați produs..."
+                      label="A. Produs"
+                      required={true}
+                      error={fieldErrors.categorieProdus}
+                    />
                   </div>
 
-                  {/* Categorie Serviciu */}
+                  {/* Categorie Serviciu - searchable select */}
                   <div>
-                    <label htmlFor="categorieServiciu" className="block mb-1">
-                      B. Serviciu
-                    </label>
-                    <select
+                    <SearchableSelect
                       id="categorieServiciu"
                       name="categorieServiciu"
+                      options={services}
                       value={formData.categorieServiciu}
                       onChange={handleChange}
-                      className="border rounded p-2 w-full"
-                      required
-                    >
-                      <option value="">Select...</option>
-                      {services.length > 0 ? (
-                        renderSelectOptions(services)
-                      ) : (
-                        <option disabled>Se încarcă...</option>
-                      )}
-                    </select>
+                      placeholder="Căutați serviciu..."
+                      label="B. Serviciu"
+                      required={true}
+                      error={fieldErrors.categorieServiciu}
+                    />
                   </div>
 
                   {/* Detalii */}

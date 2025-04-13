@@ -9,7 +9,17 @@ import config from '../config';
  * @returns {string} Complete API URL
  */
 export const getApiUrl = (endpoint) => {
-  // Remove leading slash if present
+  // Handle cases where endpoint already contains the full URL
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    // Replace hardcoded URL with configured base URL
+    const apiBase = config.api.baseUrl;
+    const baseWithoutSlash = apiBase.endsWith('/') ? apiBase.slice(0, -1) : apiBase;
+    
+    // Replace all instances of hardcoded URL with configured base URL
+    return endpoint.replace(/https?:\/\/crm\.xcore\.md\/api/g, baseWithoutSlash);
+  }
+
+  // Normal endpoint processing - remove leading slash if present
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
   return `${config.api.baseUrl}/${cleanEndpoint}`;
 };

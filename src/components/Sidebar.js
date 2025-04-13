@@ -6,61 +6,63 @@ import {
   DocumentIcon,
   PhoneIcon,
   Cog6ToothIcon,
+  BookOpenIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from '@heroicons/react/24/outline';
 import './../App.css';
+import { useAuth } from '../contexts/AuthContext';
+import apiService from '../services/api';
+import config from '../config';
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState({ name: '', email: '' });
+  const [nomenclatoareOpen, setNomenclatoareOpen] = useState(false);
   const [activityCounts, setActivityCounts] = useState({
     inchis: 0,
     respins: 0,
     calls: 0, // Add this field for number of calls
   });
 
+  const { logout, user: authUser } = useAuth(); // Use authentication context
+  
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
+    const storedUser = localStorage.getItem(config.auth.userKey);
     if (storedUser) {
       setUser(JSON.parse(storedUser));
+    } else if (authUser) {
+      setUser(authUser);
     }
-  }, []);
+  }, [authUser]);
+
+  // Auto-expand the Nomenclatoare menu if we're on any nomenclator page
+  useEffect(() => {
+    if (location.pathname === '/produse' || 
+        location.pathname === '/domenii' ||
+        location.pathname === '/servicii' ||
+        location.pathname === '/agenti-economici') {
+      setNomenclatoareOpen(true);
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     const fetchActivityCounts = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('No token found');
-        return;
-      }
-  
-      const url = 'https://crm.xcore.md/api/documents';
-      const callsUrl = 'https://crm.xcore.md/api/calls/all'; // Fetch the actual calls
-      const options = {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      };
-  
       try {
-        const callsResponse = await fetch(callsUrl, options);
-        const documentsResponse = await fetch(url, options);
-  
-        if (!callsResponse.ok || !documentsResponse.ok) {
-          throw new Error('Error fetching data');
-        }
-  
-        const callsData = await callsResponse.json();
-        const documentsData = await documentsResponse.json();
+        // Use our API service to get data
+        const [documentsData, callsData] = await Promise.all([
+          apiService.documents.getAll(),
+          apiService.get('calls/all')
+        ]);
   
         // Count statuses for documents
-        const inchisCount = documentsData.data.filter((item) => item.status === 'Inchis').length;
-        const respinsCount = documentsData.data.filter((item) => item.status === 'Respins').length;
+        const inchisCount = documentsData.filter((item) => item.status === 'Inchis').length;
+        const respinsCount = documentsData.filter((item) => item.status === 'Respins').length;
   
         // Count total calls correctly
-        const callsCount = callsData.data.length; // If callsData.data gives 6 calls, it should return 6
+        const callsCount = Array.isArray(callsData.data) ? callsData.data.length : 
+                          (Array.isArray(callsData) ? callsData.length : 0);
   
         setActivityCounts({
           inchis: inchisCount,
@@ -77,37 +79,12 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   
 
   const handleLogout = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      console.error('No token found');
-      return;
-    }
-
-    const url = 'https://crm.xcore.md/api/logout';
-    const options = {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    };
-
     try {
-      const response = await fetch(url, options);
-      if (response.ok) {
-        const data = await response.json();
-        console.log(data.message);
-
-        localStorage.clear();
-
-        setUser({ name: '', email: '' });
-        navigate('/login');
-      } else {
-        console.error('Logout failed');
-      }
+      // Use our auth context to handle logout
+      await logout();
+      // Navigation is handled by the auth context
     } catch (error) {
-      console.error('An error occurred:', error);
+      console.error('An error occurred during logout:', error);
     }
   };
 
@@ -157,14 +134,58 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               </Link>
             </li>
 
-            <li className={`flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-700 cursor-pointer transition duration-200 ${location.pathname === '/setari' ? 'bg-gray-700' : ''}`}>
-              <Cog6ToothIcon className="h-6 w-6" />
-              <Link to="/setari" className="text-white no-underline flex-1">
-                Setări
-              </Link>
+            {/* Nomenclatoare submenu */}
+            <li className="flex flex-col">
+              <div 
+                className={`flex items-center justify-between space-x-3 p-2 rounded-lg hover:bg-gray-700 cursor-pointer transition duration-200 ${
+                  location.pathname === '/produse' || location.pathname === '/domenii' ? 'bg-gray-700' : ''
+                }`}
+                onClick={() => setNomenclatoareOpen(!nomenclatoareOpen)}
+              >
+                <div className="flex items-center space-x-3">
+                  <BookOpenIcon className="h-6 w-6" />
+                  <span className="flex-1 text-white">Nomenclatoare</span>
+                </div>
+                {nomenclatoareOpen ? (
+                  <ChevronUpIcon className="h-4 w-4" />
+                ) : (
+                  <ChevronDownIcon className="h-4 w-4" />
+                )}
+              </div>
+              
+              {nomenclatoareOpen && (
+                <ul className="ml-6 mt-2 space-y-2">
+                  <li className={`flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-700 cursor-pointer transition duration-200 ${
+                    location.pathname === '/produse' ? 'bg-gray-700' : ''
+                  }`}>
+                    <Link to="/produse" className="text-white no-underline flex-1">
+                      Produse
+                    </Link>
+                  </li>
+                  <li className={`flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-700 cursor-pointer transition duration-200 ${
+                    location.pathname === '/domenii' ? 'bg-gray-700' : ''
+                  }`}>
+                    <Link to="/domenii" className="text-white no-underline flex-1">
+                      Domenii
+                    </Link>
+                  </li>
+                  <li className={`flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-700 cursor-pointer transition duration-200 ${
+                    location.pathname === '/servicii' ? 'bg-gray-700' : ''
+                  }`}>
+                    <Link to="/servicii" className="text-white no-underline flex-1">
+                      Servicii
+                    </Link>
+                  </li>
+                  <li className={`flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-700 cursor-pointer transition duration-200 ${
+                    location.pathname === '/agenti-economici' ? 'bg-gray-700' : ''
+                  }`}>
+                    <Link to="/agenti-economici" className="text-white no-underline flex-1">
+                      Agenți Economici
+                    </Link>
+                  </li>
+                </ul>
+              )}
             </li>
-
-            
           </ul>
         </div>
 

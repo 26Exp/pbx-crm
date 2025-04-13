@@ -1,12 +1,20 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
-import config from '../config';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const RequireAuth = ({ children }) => {
-  const token = localStorage.getItem(config.auth.tokenKey);
+  const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
+  
+  // Handle loading state while auth check is in progress
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen p-4">Încărcare...</div>;
+  }
 
-  if (!token) {
-    return <Navigate to="/login" replace />;
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    // Redirect to login and remember the page the user was trying to access
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
   return children;

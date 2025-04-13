@@ -3,32 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import EditDocumentModal from './EditDocumentModal';
 import * as XLSX from 'xlsx'; // ✅ Import for Excel export
+import { getApiUrl, getAuthHeaders, fetchAllPages } from '../services/apiUtils';
+import config from '../config';
+import apiService from '../services/api';
 
 
 
 
-// Helper function to fetch all pages of paginated API data
-const fetchAllPages = async (url, headers) => {
-  let allData = [];
-  let currentPage = 1;
-  let lastPage = 1;
-
-  try {
-    while (currentPage <= lastPage) {
-      const response = await fetch(`${url}?page=${currentPage}`, { headers });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch data from ${url} (Page ${currentPage})`);
-      }
-      const data = await response.json();
-      allData = [...allData, ...data.data];
-      lastPage = data.last_page;
-      currentPage += 1;
-    }
-    return allData;
-  } catch (error) {
-    throw error;
-  }
-};
+// We're now using the fetchAllPages utility from apiUtils.js
 
 const DocumentTable = () => {
   const [documents, setDocuments] = useState([]);
@@ -63,8 +45,8 @@ const DocumentTable = () => {
       setLoading(true);
       setErrors([]);
 
-      // Retrieve token from localStorage
-      const token = localStorage.getItem('token');
+      // Check if user is authenticated
+      const token = localStorage.getItem(config.auth.tokenKey);
 
       if (!token) {
         setErrors(['Tokenul de autentificare nu a fost găsit. Vă rugăm să vă autentificați din nou.']);
@@ -72,22 +54,8 @@ const DocumentTable = () => {
         return;
       }
 
-      const headers = {
-        Accept: 'application/json',
-        Authorization: `Bearer ${token}`,
-      };
-
-      // Define API endpoints for related entities
-      const endpoints = {
-        documents: 'https://crm.xcore.md/api/documents',
-        cities: 'https://crm.xcore.md/api/cities',
-        domains: 'https://crm.xcore.md/api/domains',
-        businesses: 'https://crm.xcore.md/api/business',
-        services: 'https://crm.xcore.md/api/services',
-      };
-
       try {
-        // Fetch all related entities concurrently (excluding institutions)
+        // Fetch all related entities concurrently using our API service
         const [
           documentsData,
           citiesData,
@@ -95,11 +63,11 @@ const DocumentTable = () => {
           businessesData,
           servicesData,
         ] = await Promise.all([
-          fetchAllPages(endpoints.documents, headers),
-          fetchAllPages(endpoints.cities, headers),
-          fetchAllPages(endpoints.domains, headers),
-          fetchAllPages(endpoints.businesses, headers),
-          fetchAllPages(endpoints.services, headers),
+          apiService.documents.getAll(),
+          apiService.refData.getCities(),
+          apiService.refData.getDomains(), 
+          apiService.refData.getBusinesses(),
+          apiService.refData.getServices(),
         ]);
 
         // Create lookup maps

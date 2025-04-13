@@ -3,6 +3,8 @@ import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { FaFileExport } from 'react-icons/fa'; // Importing the export icon
 import { CSVLink } from "react-csv";  // Import CSVLink for export
+import apiService from '../services/api';
+import config from '../config';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -11,23 +13,19 @@ const BarChart = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const token = localStorage.getItem('token');
-      const url = 'https://crm.xcore.md/api/documents';
-      const options = {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      };
-
       try {
-        const response = await fetch(url, options);
-        const { data } = await response.json();
+        // Use our API service to get documents
+        const data = await apiService.documents.getAll();
 
+        // Make sure data is an array
+        const documentsArray = Array.isArray(data) ? data : 
+                              (data?.data && Array.isArray(data.data) ? data.data : []);
+        
         // Process data for Bar Chart
-        const statusCounts = data.reduce((acc, doc) => {
-          acc[doc.status] = (acc[doc.status] || 0) + 1;
+        const statusCounts = documentsArray.reduce((acc, doc) => {
+          if (doc && doc.status) {
+            acc[doc.status] = (acc[doc.status] || 0) + 1;
+          }
           return acc;
         }, {});
 

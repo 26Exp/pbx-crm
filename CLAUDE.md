@@ -1,0 +1,1 @@
+- documentatia api e disponibila pe acest url: http://127.0.0.1:8000/docs/api#/

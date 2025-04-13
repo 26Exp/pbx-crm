@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import EditDocumentModal from './EditDocumentModal'; // Import your modal component
 import { Link, useNavigate } from 'react-router-dom';
+import { getApiUrl, getAuthHeaders } from '../services/apiUtils';
+import config from '../config';
+import Pagination from './Pagination';
 
 
 // Utility function to format date to Romanian language
@@ -27,6 +30,12 @@ const CallsPage = () => {
   const [loading, setLoading] = useState(true); // Loading state
   const [error, setError] = useState(null); // Error state
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCallId, setSelectedCallId] = useState(null);
   const navigate = useNavigate();
@@ -34,17 +43,14 @@ const CallsPage = () => {
   // Fetch data from API
   useEffect(() => {
     const fetchData = async () => {
-      const callsUrl = 'https://crm.xcore.md/api/calls/all';
-      const documentsUrl = 'https://crm.xcore.md/api/documents';
-      const token = localStorage.getItem('token'); // Retrieve token from localStorage
-      console.log(token);
+      // Add pagination parameters
+      const queryParams = `?page=${currentPage}&per_page=${itemsPerPage}`;
+      const callsUrl = getApiUrl(`calls/all${queryParams}`);
+      const documentsUrl = getApiUrl('documents');
 
       const options = {
         method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: getAuthHeaders(),
       };
 
       try {
@@ -54,6 +60,7 @@ const CallsPage = () => {
           throw new Error(`Error fetching calls: ${callsResponse.status} ${callsResponse.statusText}`);
         }
         const callsJson = await callsResponse.json();
+        console.log("API Response:", callsJson);
 
         // Fetch documents data
         const documentsResponse = await fetch(documentsUrl, options);
@@ -79,7 +86,15 @@ const CallsPage = () => {
           contact: item.client || '-',
           documentId: callIdToDocumentId[item.id] || null, // Add documentId if exists
         }));
+        
+        // Update the state with the paginated data from server
         setCallsData(transformedData);
+        // Set pagination data from API response
+        setTotalItems(callsJson.total || 0);
+        setCurrentPage(callsJson.current_page || 1);
+        setTotalPages(callsJson.last_page || 1);
+        setItemsPerPage(callsJson.per_page || 10);
+        
         setLoading(false);
       } catch (err) {
         console.error(err);
@@ -89,19 +104,75 @@ const CallsPage = () => {
     };
 
     fetchData();
-  }, []);
+  }, [currentPage, itemsPerPage]); // Refetch when page or items per page change
 
   // Filter the data based on the search term (searching by phone number)
-  const filteredData = callsData.filter((row) =>
-    normalizePhoneNumber(row.contact).includes(normalizePhoneNumber(searchTerm))
-  );
+  const filteredData = useMemo(() => {
+    if (!searchTerm) {
+      // If no search term, return all data directly
+      return callsData;
+    }
+    // Filter only when search term is entered
+    return callsData.filter((row) =>
+      normalizePhoneNumber(row.contact).includes(normalizePhoneNumber(searchTerm))
+    );
+  }, [callsData, searchTerm]);
+  
+  // If we're searching, use client-side pagination
+  const isSearching = searchTerm !== '';
+  
+  // For search results, calculate pagination locally
+  const localTotalItems = isSearching ? filteredData.length : totalItems;
+  const localTotalPages = isSearching ? Math.max(1, Math.ceil(localTotalItems / itemsPerPage)) : totalPages;
+  
+  // Get current items to display
+  const currentItems = isSearching ? 
+    // If searching, slice the filtered data
+    filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) : 
+    // If not searching, use the API-paginated data directly
+    filteredData;
+  
+  // Update search term handling
+  useEffect(() => {
+    if (searchTerm) {
+      // Reset to page 1 when searching
+      setCurrentPage(1);
+    }
+  }, [searchTerm]);
+  
+  // Handle page change
+  const handlePageChange = (pageNumber) => {
+    console.log("Changing to page:", pageNumber, "Total pages:", isSearching ? localTotalPages : totalPages);
+    
+    // Validate page bounds against the appropriate total pages count
+    const maxPages = isSearching ? localTotalPages : totalPages;
+    if (pageNumber < 1) {
+      pageNumber = 1;
+    } else if (pageNumber > maxPages) {
+      pageNumber = maxPages;
+    }
+    
+    setCurrentPage(pageNumber);
+    // Reset selections when page changes
+    setSelectedRows([]);
+    setSelectAll(false);
+  };
+  
+  // Handle items per page change
+  const handleItemsPerPageChange = (newItemsPerPage) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1); // Reset to first page when changing items per page
+    // Reset selections
+    setSelectedRows([]);
+    setSelectAll(false);
+  };
 
   // Handle selecting/deselecting a single row
-  const handleRowSelection = (index) => {
-    if (selectedRows.includes(index)) {
-      setSelectedRows(selectedRows.filter((rowIndex) => rowIndex !== index));
+  const handleRowSelection = (id) => {
+    if (selectedRows.includes(id)) {
+      setSelectedRows(selectedRows.filter((rowId) => rowId !== id));
     } else {
-      setSelectedRows([...selectedRows, index]);
+      setSelectedRows([...selectedRows, id]);
     }
   };
 
@@ -110,7 +181,8 @@ const CallsPage = () => {
     if (selectAll) {
       setSelectedRows([]);
     } else {
-      setSelectedRows(filteredData.map((_, index) => index));
+      // Only select the visible rows (current page)
+      setSelectedRows(currentItems.map(row => row.id));
     }
     setSelectAll(!selectAll);
   };
@@ -194,18 +266,18 @@ const CallsPage = () => {
                 </td>
               </tr>
             ) : (
-              filteredData.map((row, index) => (
+              currentItems.map((row, index) => (
                 <tr
-                  key={index}
+                  key={row.id}
                   className={`hover:bg-gray-50 h-14 md:h-16 text-sm md:text-base ${
-                    selectedRows.includes(index) ? 'bg-blue-100' : ''
+                    selectedRows.includes(row.id) ? 'bg-blue-100' : ''
                   }`}
                 >
                   <td className="py-2 md:py-3 px-2 md:px-4 border-b">
                     <input
                       type="checkbox"
-                      checked={selectedRows.includes(index)}
-                      onChange={() => handleRowSelection(index)}
+                      checked={selectedRows.includes(row.id)}
+                      onChange={() => handleRowSelection(row.id)}
                     />
                   </td>
                   <td className="py-2 md:py-3 px-2 md:px-4 border-b whitespace-nowrap">
@@ -246,11 +318,11 @@ const CallsPage = () => {
               Nu există apeluri care să corespundă criteriilor de căutare.
             </div>
           ) : (
-            filteredData.map((row, index) => (
+            currentItems.map((row, index) => (
               <div
-                key={index}
+                key={row.id}
                 className={`bg-white border border-gray-200 rounded-lg mb-4 p-4 ${
-                  selectedRows.includes(index) ? 'bg-blue-100' : ''
+                  selectedRows.includes(row.id) ? 'bg-blue-100' : ''
                 }`}
               >
                 <div className="flex justify-between items-center mb-2">
@@ -259,8 +331,8 @@ const CallsPage = () => {
                   </span>
                   <input
                     type="checkbox"
-                    checked={selectedRows.includes(index)}
-                    onChange={() => handleRowSelection(index)}
+                    checked={selectedRows.includes(row.id)}
+                    onChange={() => handleRowSelection(row.id)}
                   />
                 </div>
                 <div className="text-gray-600 text-sm mb-1">
@@ -300,6 +372,16 @@ const CallsPage = () => {
           )}
         </div>
       </div>
+
+      {/* Pagination */}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={isSearching ? localTotalPages : totalPages}
+        onPageChange={handlePageChange}
+        itemsPerPage={itemsPerPage}
+        onItemsPerPageChange={handleItemsPerPageChange}
+        totalItems={isSearching ? localTotalItems : totalItems}
+      />
 
       {/* Render EditDocumentModal */}
       {isModalOpen && (
