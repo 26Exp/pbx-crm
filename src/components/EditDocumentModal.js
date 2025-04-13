@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import apiService from '../services/api';
+import { getApiUrl, getAuthHeaders, fetchAllPages } from '../services/apiUtils';
+import config from '../config';
 
 const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, callId }) => {
   const [formData, setFormData] = useState({
@@ -34,50 +37,13 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
     { value: 3, label: 'Rezolvat' },
   ];
 
-  // Helper function to fetch all pages of paginated API data
-  const fetchAllPages = async (url, headers) => {
-    let allData = [];
-    let currentPage = 1;
-    let lastPage = 1;
-
-    try {
-      while (currentPage <= lastPage) {
-        const response = await fetch(`${url}?page=${currentPage}`, { headers });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch data from ${url}`);
-        }
-        const data = await response.json();
-        allData = [...allData, ...data.data];
-        lastPage = data.last_page;
-        currentPage += 1;
-      }
-      return allData;
-    } catch (error) {
-      throw error;
-    }
-  };
+  // We're now using the fetchAllPages utility from our apiUtils.js
 
   // Fetch reference data
   useEffect(() => {
     const fetchReferenceData = async () => {
       try {
-        const token = localStorage.getItem('token');
-
-        // Define the endpoints for reference data
-        const endpoints = {
-          cities: 'https://crm.xcore.md/api/cities',
-          domains: 'https://crm.xcore.md/api/domains',
-          businesses: 'https://crm.xcore.md/api/business',
-          products: 'https://crm.xcore.md/api/products',
-          services: 'https://crm.xcore.md/api/services',
-        };
-
-        const headers = {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        };
-
-        // Fetch all reference data concurrently
+        // Fetch all reference data concurrently using apiService
         const [
           citiesData,
           domainsData,
@@ -85,11 +51,11 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
           productsData,
           servicesData,
         ] = await Promise.all([
-          fetchAllPages(endpoints.cities, headers),
-          fetchAllPages(endpoints.domains, headers),
-          fetchAllPages(endpoints.businesses, headers),
-          fetchAllPages(endpoints.products, headers),
-          fetchAllPages(endpoints.services, headers),
+          apiService.refData.getCities(),
+          apiService.refData.getDomains(),
+          apiService.refData.getBusinesses(),
+          apiService.get('products'),
+          apiService.refData.getServices(),
         ]);
 
         setCities(citiesData || []);
@@ -195,14 +161,6 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
     setErrors([]);
     setSuccess(false);
   
-    const token = localStorage.getItem('token');
-  
-    // Determine the request method and URL
-    const method = documentData ? 'PATCH' : 'POST';
-    const url = documentData
-      ? `https://crm.xcore.md/api/documents/${documentData.nr}`
-      : 'https://crm.xcore.md/api/documents';
-  
     // Map formData to API fields
     const mappedData = {
       call_id: documentData ? documentData.call_id : callId,
@@ -217,30 +175,15 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
     };
   
     try {
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(mappedData),
-      });
-  
-      if (!response.ok) {
-        const errorData = await response.json();
-        if (errorData.errors) {
-          const errorMessages = Object.values(errorData.errors).flat();
-          setErrors(errorMessages);
-        } else if (errorData.message) {
-          setErrors([errorData.message]);
-        } else {
-          setErrors(['Eroare neașteptată la actualizarea documentului.']);
-        }
-        throw new Error('Eroare la actualizarea documentului.');
+      let responseData;
+      
+      if (documentData) {
+        // Update existing document
+        responseData = await apiService.documents.update(documentData.nr, mappedData);
+      } else {
+        // Create new document
+        responseData = await apiService.documents.create(mappedData);
       }
-  
-      const responseData = await response.json();
   
       const updatedDoc = {
         id: responseData.id,
@@ -272,21 +215,8 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`https://crm.xcore.md/api/documents/${documentData.nr}`, {
-        method: 'DELETE',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        setErrors([errorData.message || 'Eroare la ștergerea documentului.']);
-        return;
-      }
-
+      await apiService.documents.delete(documentData.nr);
+      
       // Update parent component
       updateDocument(null, documentData.nr);
       onClose();

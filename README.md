@@ -1,6 +1,44 @@
-# Getting Started with Create React App
+# Front Protectia Consumatorului
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Portal CRM pentru protecția consumatorului.
+
+## Tehnologii
+
+Aplicația folosește următoarele tehnologii:
+- React 18
+- React Router 6
+- TailwindCSS
+- Chart.js / Recharts pentru grafice
+- Material UI
+- XLSX pentru export Excel
+
+## Configurare
+
+### Variabile de mediu
+
+Aplicația folosește variabile de mediu pentru configurare. Copiați fișierul `.env.example` și creați propriul fișier `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Variabile disponibile:
+```
+# API Configuration
+REACT_APP_API_URL=https://crm.xcore.md/api
+
+# Environment
+REACT_APP_ENV=development
+```
+
+### Medii multiple
+
+Pentru diferite medii, avem fișiere de configurare separate:
+- `.env.development` - pentru dezvoltare (npm start)
+- `.env.production` - pentru producție (npm run build)
+- `.env.local` - suprascrie configurațiile de bază
+
+Pentru a suprascrie orice configurare pentru mediul local, crează fișierul `.env.development.local`.
 
 ## Available Scripts
 

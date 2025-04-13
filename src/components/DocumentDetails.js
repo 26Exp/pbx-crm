@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import apiService from '../services/api';
+import { getApiUrl, getAuthHeaders, fetchAllPages } from '../services/apiUtils';
 
 const DocumentDetails = () => {
   const { documentId } = useParams();
@@ -20,56 +22,39 @@ const DocumentDetails = () => {
       setLoading(true);
       setError(null);
 
-      const token = localStorage.getItem('token');
-
-      if (!token) {
-        setError('Tokenul de autentificare nu a fost găsit. Vă rugăm să vă autentificați din nou.');
-        setLoading(false);
-        return;
-      }
-
-      const headers = {
-        Accept: 'application/json',
-        Authorization: `Bearer ${token}`,
-      };
-
       try {
-        // Fetch document data
-        const documentResponse = await fetch(`https://crm.xcore.md/api/documents/${documentId}`, { headers });
-        if (!documentResponse.ok) {
-          throw new Error(`Eroare la preluarea documentului: ${documentResponse.statusText}`);
-        }
-        const documentData = await documentResponse.json();
+        // Use API service to fetch document data
+        const documentData = await apiService.documents.getById(documentId);
 
-        // Fetch related entities
+        // Fetch related entities using our fetchAllPages utility
         const [citiesData, domainsData, businessesData, servicesData] = await Promise.all([
-          fetch('https://crm.xcore.md/api/cities', { headers }).then(res => res.json()),
-          fetch('https://crm.xcore.md/api/domains', { headers }).then(res => res.json()),
-          fetch('https://crm.xcore.md/api/business', { headers }).then(res => res.json()),
-          fetch('https://crm.xcore.md/api/services', { headers }).then(res => res.json()),
+          apiService.refData.getCities(),
+          apiService.refData.getDomains(),
+          apiService.refData.getBusinesses(),
+          apiService.refData.getServices(),
         ]);
 
         // Create lookup maps
         const citiesLookup = {};
-        citiesData.data.forEach((city) => {
+        citiesData.forEach((city) => {
           citiesLookup[city.id] = city.name;
         });
         setCitiesMap(citiesLookup);
 
         const domainsLookup = {};
-        domainsData.data.forEach((domain) => {
+        domainsData.forEach((domain) => {
           domainsLookup[domain.id] = domain.name;
         });
         setDomainsMap(domainsLookup);
 
         const businessesLookup = {};
-        businessesData.data.forEach((business) => {
+        businessesData.forEach((business) => {
           businessesLookup[business.id] = business.name;
         });
         setBusinessesMap(businessesLookup);
 
         const servicesLookup = {};
-        servicesData.data.forEach((service) => {
+        servicesData.forEach((service) => {
           servicesLookup[service.id] = service.name;
         });
         setServicesMap(servicesLookup);

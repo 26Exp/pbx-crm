@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Logoimg from './assets/profile.jpg';
+import apiService from './services/api';
+import config from './config';
 
 const LoginPage = () => {
   const [login, setLogin] = useState('');
@@ -13,47 +15,32 @@ const LoginPage = () => {
     setError(''); // Reset any previous errors
 
     try {
-      const response = await fetch('https://crm.xcore.md/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: login,
-          password,
-        }),
+      const data = await apiService.auth.login({
+        email: login,
+        password
       });
+      
+      const { token, name, email } = data;
 
-      if (response.ok) {
-        const data = await response.json();
-        const { token, name, email } = data;
+      // Save the token to localStorage
+      localStorage.setItem(config.auth.tokenKey, token);
 
-        // Save the token to localStorage or any secure storage
-        localStorage.setItem('token', token);
+      // Save user details
+      localStorage.setItem(config.auth.userKey, JSON.stringify({ name, email }));
 
-        // Optionally save user details
-        localStorage.setItem('user', JSON.stringify({ name, email }));
-
-        // Redirect to the homepage
-        navigate('/');
-      } else {
-        switch (response.status) {
-          case 401:
-            setError('Unauthorized. Please check your login credentials.');
-            break;
-          case 403:
-            setError('Authorization error. You do not have permission to access this.');
-            break;
-          case 422:
-            setError('Validation error. Please ensure all fields are filled out correctly.');
-            break;
-          default:
-            setError('An unexpected error occurred. Please try again later.');
-            break;
-        }
-      }
+      // Redirect to the homepage
+      navigate('/');
     } catch (err) {
-      setError('An error occurred. Please check your connection.');
+      // Handle different error scenarios based on error message
+      if (err.message.includes('Unauthorized') || err.message.includes('401')) {
+        setError('Credențiale incorecte. Verificați email-ul și parola.');
+      } else if (err.message.includes('Permission') || err.message.includes('403')) {
+        setError('Nu aveți permisiuni pentru a accesa această resursă.');
+      } else if (err.message.includes('Validation') || err.message.includes('422')) {
+        setError('Datele introduse nu sunt valide.');
+      } else {
+        setError('A apărut o eroare. Încercați din nou mai târziu.');
+      }
     }
   };
 
@@ -95,8 +82,20 @@ const LoginPage = () => {
 
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center">
-            <input name='remember' id='remember' type="checkbox" className="mr-2" />
-            <label for='remember' className="text-gray-600 select-none">Memorează logarea</label>
+            <input 
+              name='remember' 
+              id='remember' 
+              type="checkbox" 
+              className="mr-2" 
+              onChange={(e) => {
+                if (e.target.checked) {
+                  localStorage.setItem(config.auth.rememberKey, 'true');
+                } else {
+                  localStorage.removeItem(config.auth.rememberKey);
+                }
+              }} 
+            />
+            <label htmlFor='remember' className="text-gray-600 select-none">Memorează logarea</label>
           </div>
           <div>
             <a href="#" className="text-blue-500">Ați uitat parola?</a>
