@@ -1,11 +1,40 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import DocumentTable from './DocumentTable';
 import BarChart from './BarChart';
 import LineChart from './LineChart';
 import { useDocument } from '../contexts/DocumentContext';
+import apiService from '../services/api';
 
 const DocumentPage = ({ documents }) => {
   const { openDocumentModal } = useDocument();
+  const [statistics, setStatistics] = useState({
+    total: 0,
+    closed: 0,
+    in_progress: 0
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch statistics data from API
+  useEffect(() => {
+    const fetchStatistics = async () => {
+      try {
+        setIsLoading(true);
+        const data = await apiService.get('statistics');
+        setStatistics({
+          total: data.documents.total || 0,
+          closed: data.documents.closed || 0,
+          in_progress: data.documents.in_progress || 0
+        });
+      } catch (err) {
+        console.error("Error fetching statistics:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStatistics();
+  }, []);
+
   return (
     <div className="p-2 sm:p-4 md:p-6 bg-gray-50 max-w-full overflow-hidden">
       {/* Header section with stats cards */}
@@ -18,7 +47,13 @@ const DocumentPage = ({ documents }) => {
             <div className="flex justify-between">
               <div>
                 <p className="text-sm text-gray-500 font-medium">Total Documente</p>
-                <p className="text-2xl font-bold text-gray-800">67</p>
+                <p className="text-2xl font-bold text-gray-800">
+                  {isLoading ? (
+                    <span className="inline-block w-12 h-8 bg-gray-200 animate-pulse rounded"></span>
+                  ) : (
+                    statistics.total
+                  )}
+                </p>
               </div>
               <div className="bg-blue-100 p-3 rounded-full text-blue-500 text-xl">
                 📄
@@ -31,7 +66,13 @@ const DocumentPage = ({ documents }) => {
             <div className="flex justify-between">
               <div>
                 <p className="text-sm text-gray-500 font-medium">Documente Închise</p>
-                <p className="text-2xl font-bold text-gray-800">42</p>
+                <p className="text-2xl font-bold text-gray-800">
+                  {isLoading ? (
+                    <span className="inline-block w-12 h-8 bg-gray-200 animate-pulse rounded"></span>
+                  ) : (
+                    statistics.closed
+                  )}
+                </p>
               </div>
               <div className="bg-green-100 p-3 rounded-full text-green-500 text-xl">
                 ✅
@@ -44,7 +85,13 @@ const DocumentPage = ({ documents }) => {
             <div className="flex justify-between">
               <div>
                 <p className="text-sm text-gray-500 font-medium">În Lucru</p>
-                <p className="text-2xl font-bold text-gray-800">25</p>
+                <p className="text-2xl font-bold text-gray-800">
+                  {isLoading ? (
+                    <span className="inline-block w-12 h-8 bg-gray-200 animate-pulse rounded"></span>
+                  ) : (
+                    statistics.in_progress
+                  )}
+                </p>
               </div>
               <div className="bg-yellow-100 p-3 rounded-full text-yellow-500 text-xl">
                 ⏳

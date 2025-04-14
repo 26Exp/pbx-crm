@@ -1,7 +1,8 @@
 // DocumentTable.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import EditDocumentModal from './EditDocumentModal';
+import Pagination from './Pagination';
 import * as XLSX from 'xlsx';
 import { getApiUrl, getAuthHeaders, fetchAllPages } from '../services/apiUtils';
 import config from '../config';
@@ -12,15 +13,26 @@ import apiService from '../services/api';
 // We're now using the fetchAllPages utility from apiUtils.js
 
 const DocumentTable = () => {
+  // Track if component is mounted to prevent state updates after unmount
+  const isMounted = useRef(true);
+  // Track if a fetch request is in progress to prevent duplicate requests
+  const fetchInProgress = useRef(false);
+  
   const [documents, setDocuments] = useState([]);
   const [filteredDocuments, setFilteredDocuments] = useState([]);
-  const [selectedStatus, setSelectedStatus] = useState('');
-  const [selectedPersonType, setSelectedPersonType] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectAll, setSelectAll] = useState(false);
   const [selectedDocuments, setSelectedDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState([]);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  
+  // Filtering state
+  const [statusFilter, setStatusFilter] = useState('');
 
   // Lookup maps
   const [citiesMap, setCitiesMap] = useState({});
@@ -32,138 +44,218 @@ const DocumentTable = () => {
   const [editingDocument, setEditingDocument] = useState(null);
 
   // State for sorting
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
-
-  // State for dropdown menus
-  const [isPersonTypeMenuOpen, setIsPersonTypeMenuOpen] = useState(false);
-  const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: 'dataApel', direction: 'descending' });
 
   // Fetch documents and related entities from API
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = async (page = 1, status = null, itemsPerPage = null) => {
+    // Prevent duplicate requests
+    if (fetchInProgress.current) {
+      return;
+    }
+    
+    // Set flag to indicate fetch is in progress
+    fetchInProgress.current = true;
+    
+    // Only update loading state if component is still mounted
+    if (isMounted.current) {
       setLoading(true);
       setErrors([]);
+    }
+    
+    // Use the provided parameters or fall back to state values
+    const currentStatus = status !== null ? status : statusFilter;
+    const currentPerPage = itemsPerPage !== null ? itemsPerPage : perPage;
 
-      // Check if user is authenticated
-      const token = localStorage.getItem(config.auth.tokenKey);
+    // Check if user is authenticated
+    const token = localStorage.getItem(config.auth.tokenKey);
 
-      if (!token) {
+    if (!token) {
+      if (isMounted.current) {
         setErrors(['Tokenul de autentificare nu a fost găsit. Vă rugăm să vă autentificați din nou.']);
         setLoading(false);
-        return;
+      }
+      fetchInProgress.current = false;
+      return;
+    }
+
+    try {
+      // Fetch all related entities concurrently using our API service
+      const [
+        citiesData,
+        domainsData,
+        businessesData,
+        servicesData,
+      ] = await Promise.all([
+        apiService.refData.getCities(),
+        apiService.refData.getDomains(), 
+        apiService.refData.getBusinesses(),
+        apiService.refData.getServices(),
+      ]);
+
+      // Create lookup maps
+      const citiesLookup = {};
+      citiesData.forEach((city) => {
+        citiesLookup[city.id] = city.name;
+      });
+      setCitiesMap(citiesLookup);
+
+      const domainsLookup = {};
+      domainsData.forEach((domain) => {
+        domainsLookup[domain.id] = domain.name;
+      });
+      setDomainsMap(domainsLookup);
+
+      const businessesLookup = {};
+      businessesData.forEach((business) => {
+        businessesLookup[business.id] = business.name;
+      });
+      setBusinessesMap(businessesLookup);
+
+      const servicesLookup = {};
+      servicesData.forEach((service) => {
+        servicesLookup[service.id] = service.name;
+      });
+      setServicesMap(servicesLookup);
+
+      // Now fetch documents with pagination and filtering
+      let queryParams = `?page=${page}&per_page=${currentPerPage}`;
+      
+      // Add status filter if selected
+      if (currentStatus) {
+        queryParams += `&status=${currentStatus}`;
+      }
+      
+      console.log(`Fetching documents with params: ${queryParams}`);
+      
+      const response = await fetch(getApiUrl(`documents${queryParams}`), {
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch documents: ${response.statusText}`);
       }
 
-      try {
-        // Fetch all related entities concurrently using our API service
-        const [
-          documentsData,
-          citiesData,
-          domainsData,
-          businessesData,
-          servicesData,
-        ] = await Promise.all([
-          apiService.documents.getAll(),
-          apiService.refData.getCities(),
-          apiService.refData.getDomains(), 
-          apiService.refData.getBusinesses(),
-          apiService.refData.getServices(),
-        ]);
+      const responseData = await response.json();
+      
+      // Extract pagination metadata
+      if (responseData.meta) {
+        setCurrentPage(responseData.meta.current_page);
+        setTotalPages(responseData.meta.last_page);
+        setTotalItems(responseData.meta.total);
+        setPerPage(responseData.meta.per_page);
+      }
 
-        // Create lookup maps
-        const citiesLookup = {};
-        citiesData.forEach((city) => {
-          citiesLookup[city.id] = city.name;
-        });
-        setCitiesMap(citiesLookup);
+      const documentsData = responseData.data || [];
 
-        const domainsLookup = {};
-        domainsData.forEach((domain) => {
-          domainsLookup[domain.id] = domain.name;
-        });
-        setDomainsMap(domainsLookup);
+      // Map documents to include names instead of IDs (except institution_id)
+      const mappedDocuments = documentsData.map((doc) => ({
+        nr: doc.id,
+        statut: doc.status,
+        numePrenume: doc.name || 'N/A',
+        operator: doc.user?.name || 'N/A', // Add user name from the user property
+        continutConsultatie: domainsLookup[doc.domain_id] || `ID: ${doc.domain_id}`,
+        localitate: citiesLookup[doc.city_id] || `ID: ${doc.city_id}`,
+        detalii: doc.details,
+        domain_id: doc.domain_id,
+        city_id: doc.city_id,
+        service_id: doc.service_id,
+        product_id: doc.product_id,
+        created_at: doc.created_at,
+        call_id: doc.call_id,
+      }));
 
-        const businessesLookup = {};
-        businessesData.forEach((business) => {
-          businessesLookup[business.id] = business.name;
-        });
-        setBusinessesMap(businessesLookup);
-
-        const servicesLookup = {};
-        servicesData.forEach((service) => {
-          servicesLookup[service.id] = service.name;
-        });
-        setServicesMap(servicesLookup);
-
-        // Map documents to include names instead of IDs (except institution_id)
-        const mappedDocuments = documentsData.map((doc) => ({
-          nr: doc.id,
-          statut: doc.status,
-          numePrenume: doc.name || 'N/A',
-          continutConsultatie: domainsLookup[doc.domain_id] || `ID: ${doc.domain_id}`,
-          dataApel: doc.created_at ? doc.created_at.split('T')[0] : 'N/A',
-          localitate: citiesLookup[doc.city_id] || `ID: ${doc.city_id}`,
-          persFizica: doc.business_id === null,
-          persJuridica: doc.business_id !== null,
-          agentEconomic: doc.business_id ? businessesLookup[doc.business_id] || `ID: ${doc.business_id}` : 'N/A',
-          categorieInformatie: servicesLookup[doc.service_id] || `ID: ${doc.service_id}`,
-          detalii: doc.details,
-          domain_id: doc.domain_id,
-          city_id: doc.city_id,
-          business_id: doc.business_id,
-          service_id: doc.service_id,
-          product_id: doc.product_id,
-          created_at: doc.created_at,
-          call_id: doc.call_id,
-        }));
-
+      // Only update state if component is still mounted
+      if (isMounted.current) {
         setDocuments(mappedDocuments);
         setFilteredDocuments(mappedDocuments);
-      } catch (error) {
-        console.error(error);
+      }
+    } catch (error) {
+      console.error(error);
+      if (isMounted.current) {
         setErrors([error.message || 'Eroare la încărcarea datelor. Vă rugăm să încercați din nou.']);
-      } finally {
+      }
+    } finally {
+      // Reset fetch flag
+      fetchInProgress.current = false;
+      
+      // Only update loading state if component is still mounted
+      if (isMounted.current) {
         setLoading(false);
       }
-    };
+    }
+  };
 
-    fetchData();
+  // Set up and clean up refs
+  useEffect(() => {
+    // Set mounted flag to true
+    isMounted.current = true;
+    
+    // Fetch initial data
+    fetchData(1);
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
-  const exportToExcel = () => {
-    const worksheet = XLSX.utils.json_to_sheet(filteredDocuments);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Documente');
-  
-    // Generate and trigger download
-    XLSX.writeFile(workbook, 'documente.xlsx');
+  const exportToExcel = async () => {
+    try {
+      // Show loading
+      setLoading(true);
+      
+      // Build query params for export (all pages, but keep status filter)
+      let queryParams = `?per_page=1000`; // Get a large number of records
+      
+      // Add status filter if selected
+      // Use the current status filter to be consistent
+      if (statusFilter) {
+        queryParams += `&status=${statusFilter}`;
+      }
+      
+      console.log(`Exporting documents with params: ${queryParams}`);
+      
+      // Fetch all data for export
+      const response = await fetch(getApiUrl(`documents${queryParams}`), {
+        headers: getAuthHeaders()
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to export data: ${response.statusText}`);
+      }
+      
+      const responseData = await response.json();
+      const documentsData = responseData.data || [];
+      
+      // Map documents for export
+      const exportData = documentsData.map(doc => ({
+        'ID': doc.id,
+        'Statut': doc.status,
+        'Nume & Prenume': doc.name || 'N/A',
+        'Operator': doc.user?.name || 'N/A',
+        'Domeniul Consultație': domainsMap[doc.domain_id] || `ID: ${doc.domain_id}`,
+        'Localitatea': citiesMap[doc.city_id] || `ID: ${doc.city_id}`,
+        'Detalii': doc.details,
+        'Data Creării': doc.created_at ? new Date(doc.created_at).toLocaleDateString('ro-RO') : 'N/A'
+      }));
+      
+      // Create Excel file
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Documente');
+      
+      // Generate and trigger download
+      XLSX.writeFile(workbook, 'documente.xlsx');
+    } catch (error) {
+      console.error('Export error:', error);
+      setErrors([`Eroare la exportul datelor: ${error.message}`]);
+    } finally {
+      setLoading(false);
+    }
   };
   
-  // Filter and sort documents
+  // Sort documents only
   useEffect(() => {
-    let filtered = documents;
-
-    // Filter by selected status
-    if (selectedStatus) {
-      filtered = filtered.filter((doc) => doc.statut === selectedStatus);
-    }
-
-    // Filter by selected person type
-    if (selectedPersonType) {
-      if (selectedPersonType === 'Pers. Fizică') {
-        filtered = filtered.filter((doc) => doc.persFizica);
-      } else if (selectedPersonType === 'Pers. Juridică') {
-        filtered = filtered.filter((doc) => doc.persJuridica);
-      }
-    }
-
-    // Filter by search term (agentEconomic)
-    if (searchTerm) {
-      const lowerCaseSearchTerm = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (doc) =>
-          doc.agentEconomic &&
-          doc.agentEconomic.toLowerCase().includes(lowerCaseSearchTerm)
-      );
-    }
+    let filtered = [...documents];
 
     // Implement sorting
     if (sortConfig.key) {
@@ -197,19 +289,7 @@ const DocumentTable = () => {
     setFilteredDocuments(filtered);
     setSelectedDocuments([]);
     setSelectAll(false);
-  }, [documents, selectedStatus, selectedPersonType, searchTerm, sortConfig]);
-
-  // Handle status filter change
-  const handleStatusFilter = (status) => {
-    setSelectedStatus(status);
-    setIsStatusMenuOpen(false);
-  };
-
-  // Handle person type filter change
-  const handlePersonTypeFilter = (type) => {
-    setSelectedPersonType(type);
-    setIsPersonTypeMenuOpen(false);
-  };
+  }, [documents, sortConfig]);
 
   // Handle sorting
   const handleSort = (key) => {
@@ -218,6 +298,58 @@ const DocumentTable = () => {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
+  };
+  
+  // Helper function to fetch data with explicit parameters
+  const fetchDataWithParams = (page = 1, status = null, itemsPerPage = null) => {
+    const currentStatus = status !== null ? status : statusFilter;
+    const currentPerPage = itemsPerPage !== null ? itemsPerPage : perPage;
+    
+    console.log(`Fetching with explicit params: page=${page}, status=${currentStatus}, per_page=${currentPerPage}`);
+    
+    // Call fetchData with the current parameters
+    fetchData(page, currentStatus, currentPerPage);
+  };
+  
+  // Handle pagination
+  const handlePageChange = (page) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+    // Pass the current status filter to preserve filtering during pagination
+    fetchDataWithParams(page, statusFilter, perPage);
+  };
+  
+  // Handle status filter change
+  const handleStatusFilterChange = (status) => {
+    console.log(`Changing status filter to: ${status}`);
+    
+    // Always set the status, even if it's the same
+    // This ensures the UI stays in sync
+    setStatusFilter(status);
+    
+    // Reset to first page when filter changes
+    setCurrentPage(1);
+    
+    // Use setTimeout to ensure state updates before fetching
+    setTimeout(() => {
+      fetchDataWithParams(1, status, perPage);
+    }, 0);
+  };
+  
+  // Handle items per page change
+  const handleItemsPerPageChange = (newPerPage) => {
+    console.log(`Changing items per page to: ${newPerPage}`);
+    
+    // Update the perPage state
+    setPerPage(newPerPage);
+    // Reset to first page when changing items per page
+    setCurrentPage(1); 
+    
+    // Use setTimeout to ensure state updates before fetching
+    // Pass the new perPage value directly to fetchData to avoid state timing issues
+    setTimeout(() => {
+      fetchDataWithParams(1, statusFilter, newPerPage);
+    }, 0);
   };
 
   // Handle select/deselect all
@@ -252,19 +384,6 @@ const DocumentTable = () => {
     setEditingDocument(null);
   };
 
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!event.target.closest('.dropdown')) {
-        setIsPersonTypeMenuOpen(false);
-        setIsStatusMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   return (
     <div>
@@ -279,119 +398,53 @@ const DocumentTable = () => {
         </div>
       )}
 
-      {/* Filtering and search section */}
+      {/* Results count with Filters and Export Excel */}
       <div className="mb-6 px-5 py-4 border-b border-gray-200">
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-          {/* Search Input */}
-          <div className="relative w-full md:w-80">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+        <div className="flex flex-col sm:flex-row justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Status Filter */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-gray-600 font-medium">Statut:</span>
+              <div className="flex flex-wrap gap-1">
+                <button 
+                  onClick={() => handleStatusFilterChange('')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    statusFilter === '' 
+                      ? 'bg-indigo-100 text-indigo-700 border border-indigo-300' 
+                      : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                  }`}
+                >
+                  Toate
+                </button>
+                <button 
+                  onClick={() => handleStatusFilterChange('0')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    statusFilter === '0' 
+                      ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' 
+                      : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                  }`}
+                >
+                  În Lucru
+                </button>
+                <button 
+                  onClick={() => handleStatusFilterChange('1')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    statusFilter === '1' 
+                      ? 'bg-green-100 text-green-700 border border-green-300' 
+                      : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                  }`}
+                >
+                  Închis
+                </button>
+              </div>
             </div>
-            <input
-              type="text"
-              placeholder="Căutare agent economic..."
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
           </div>
-
-          <div className="flex flex-wrap gap-3 items-center">
-            {/* Tip persoană Filter */}
-            <div className="relative dropdown">
-              <button
-                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                onClick={() => setIsPersonTypeMenuOpen(!isPersonTypeMenuOpen)}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-                <span>{selectedPersonType || 'Tip persoană'}</span>
-              </button>
-              {isPersonTypeMenuOpen && (
-                <div className="absolute right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg w-40 z-20 overflow-hidden">
-                  <div className="py-1">
-                    <button
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
-                      onClick={() => handlePersonTypeFilter('Pers. Fizică')}
-                    >
-                      Persoană Fizică
-                    </button>
-                    <button
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
-                      onClick={() => handlePersonTypeFilter('Pers. Juridică')}
-                    >
-                      Persoană Juridică
-                    </button>
-                    <button
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
-                      onClick={() => handlePersonTypeFilter('')}
-                    >
-                      Toate
-                    </button>
-                  </div>
-                </div>
-              )}
+          
+          <div className="flex justify-between sm:justify-end items-center gap-4 w-full sm:w-auto">
+            <div className="text-sm text-gray-500 font-medium">
+              {totalItems} documente găsite
             </div>
-
-            {/* Statut Filter */}
-            <div className="relative dropdown">
-              <button
-                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                onClick={() => setIsStatusMenuOpen(!isStatusMenuOpen)}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-                <span>{selectedStatus || 'Statut'}</span>
-              </button>
-              {isStatusMenuOpen && (
-                <div className="absolute right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg w-44 z-20 overflow-hidden">
-                  <div className="py-1">
-                    <button 
-                      className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
-                      onClick={() => handleStatusFilter('In Lucru')}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span>În Lucru</span>
-                    </button>
-                    <button 
-                      className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
-                      onClick={() => handleStatusFilter('Inchis')}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span>Închis</span>
-                    </button>
-                    <button 
-                      className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
-                      onClick={() => handleStatusFilter('')}
-                    >
-                      <span className="ml-6">Toate</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Sortează după dată */}
-            <button
-              className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              onClick={() => handleSort('dataApel')}
-            >
-              {sortConfig.key === 'dataApel' ? (
-                sortConfig.direction === 'ascending' ? 
-                '↑' : 
-                '↓'
-              ) : '↑'}
-              <span>Data apelului</span>
-            </button>
-
+            
             {/* Export Excel */}
             <button
               onClick={exportToExcel}
@@ -404,11 +457,6 @@ const DocumentTable = () => {
             </button>
           </div>
         </div>
-        
-        {/* Results count */}
-        <div className="mt-4 text-sm text-gray-500 font-medium">
-          {filteredDocuments.length} documente găsite
-        </div>
       </div>
 
       {/* Table section */}
@@ -417,24 +465,7 @@ const DocumentTable = () => {
           <thead>
             <tr className="bg-gray-50">
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
-                  checked={selectAll}
-                  onChange={handleSelectAll}
-                />
-              </th>
-              <th 
-                scope="col" 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => handleSort('nr')}
-              >
-                <div className="flex items-center">
-                  <span>Nr.</span>
-                  {sortConfig.key === 'nr' && (
-                    sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'
-                  )}
-                </div>
+                #
               </th>
               <th 
                 scope="col" 
@@ -452,28 +483,13 @@ const DocumentTable = () => {
                 Nume & Prenume
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Domeniul Consultație
+                Operator
               </th>
-              <th 
-                scope="col" 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                onClick={() => handleSort('dataApel')}
-              >
-                <div className="flex items-center">
-                  <span>Data Apelului</span>
-                  {sortConfig.key === 'dataApel' && (
-                    sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'
-                  )}
-                </div>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Domeniul Consultație
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Localitatea
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Agent Economic
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Categorie Informație
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Acțiuni
@@ -483,7 +499,7 @@ const DocumentTable = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan="10" className="px-6 py-8 text-center">
+                <td colSpan="7" className="px-6 py-8 text-center">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
                   </div>
@@ -493,16 +509,8 @@ const DocumentTable = () => {
             ) : filteredDocuments.length > 0 ? (
               filteredDocuments.map((doc) => (
                 <tr key={doc.nr} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
-                      checked={selectedDocuments.includes(doc.nr)}
-                      onChange={() => handleSelectDocument(doc.nr)}
-                    />
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    #{doc.nr}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">
+                    {doc.nr}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
@@ -530,19 +538,13 @@ const DocumentTable = () => {
                     {doc.numePrenume}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {doc.operator}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {doc.continutConsultatie}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {doc.dataApel}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {doc.localitate}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {doc.agentEconomic}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {doc.categorieInformatie}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button 
@@ -558,7 +560,7 @@ const DocumentTable = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="10" className="px-6 py-8 text-center">
+                <td colSpan="7" className="px-6 py-8 text-center">
                   <p className="text-sm text-gray-500">Nu există documente care să corespundă criteriilor selectate.</p>
                 </td>
               </tr>
@@ -566,6 +568,16 @@ const DocumentTable = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      <Pagination 
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={handlePageChange}
+        itemsPerPage={perPage}
+        onItemsPerPageChange={handleItemsPerPageChange}
+        totalItems={totalItems}
+      />
 
       {/* Edit Document Modal */}
       {editingDocument && (

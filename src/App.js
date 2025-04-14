@@ -54,6 +54,30 @@ function MainApp({ addDocument, documents }) {
     setUnauthorizedCallback(handleUnauthorized);
   }, [handleUnauthorized]);
 
+  // Update document title based on current route
+  useEffect(() => {
+    const getPageTitle = () => {
+      const path = location.pathname;
+      
+      if (path === '/') return 'Statistică | PBX CRM';
+      if (path === '/login') return 'Autentificare | PBX CRM';
+      if (path === '/apeluri') return 'Apeluri | PBX CRM';
+      if (path === '/documente') return 'Documente | PBX CRM';
+      if (path === '/produse') return 'Produse | PBX CRM';
+      if (path === '/domenii') return 'Domenii | PBX CRM';
+      if (path === '/servicii') return 'Servicii | PBX CRM';
+      if (path === '/agenti-economici') return 'Agenți Economici | PBX CRM';
+      
+      // Check if it's a document detail page
+      if (path.startsWith('/documents/')) return 'Detalii Document | PBX CRM';
+      
+      // Default title for unknown routes
+      return 'PBX CRM | Protecția Consumatorului';
+    };
+    
+    document.title = getPageTitle();
+  }, [location]);
+
   // Check if the current route is '/login'
   const isLoginPage = location.pathname === '/login';
   
@@ -79,7 +103,7 @@ function MainApp({ addDocument, documents }) {
     <div className="min-h-screen flex">
       {/* Only render Sidebar and Header if not on the login page */}
       {!isLoginPage && <Sidebar />}
-      <div className="flex-1 flex flex-col ml-72 min-h-screen bg-gray-50 max-w-full" id="content-wrapper">
+      <div className={`flex-1 flex flex-col ${!isLoginPage ? 'ml-72' : ''} min-h-screen bg-gray-50 max-w-full`} id="content-wrapper">
         {!isLoginPage && <Header />}
         <div className="flex-1 p-1 sm:p-2 md:p-4 overflow-x-hidden">
           <Routes>
