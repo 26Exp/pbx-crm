@@ -3,7 +3,7 @@ import apiService from '../services/api';
 import SearchableSelect from './SearchableSelect';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, callId }) => {
+const EditDocumentModal = ({ isOpen, onClose, documentData, documentId, updateDocument, callId, mode = 'create' }) => {
   const [formData, setFormData] = useState({
     numePrenume: '',
     continutConsultatie: '',
@@ -25,11 +25,12 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
 
-  // State for form submission
+  // State for form submission and document loading
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState([]);
   const [success, setSuccess] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
+  const [loadedDocumentData, setLoadedDocumentData] = useState(null);
   
   // Track form field errors
   const [fieldErrors, setFieldErrors] = useState({});
@@ -66,7 +67,7 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
           apiService.refData.getCities(),
           apiService.refData.getDomains(),
           apiService.refData.getBusinesses(),
-          apiService.get('products'),
+          apiService.refData.getProducts(),
           apiService.refData.getServices(),
         ]);
 
@@ -86,29 +87,55 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
     fetchReferenceData();
   }, []);
 
-  // Initialize form data with the document data
+  // Load document data from API if documentId is provided
   useEffect(() => {
-    if (documentData) {
+    const fetchDocumentData = async () => {
+      if (documentId && mode === 'view') {
+        try {
+          setLoading(true);
+          const response = await apiService.get(`documents/${documentId}`);
+          if (response) {
+            setLoadedDocumentData(response);
+          } else {
+            setErrors(['Eroare la încărcarea documentului. Documentul nu a fost găsit.']);
+          }
+        } catch (err) {
+          console.error('Error fetching document:', err);
+          setErrors(['Eroare la încărcarea documentului. Vă rugăm să încercați din nou.']);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchDocumentData();
+  }, [documentId, mode]);
+
+  // Initialize form data with document data (either passed directly or loaded from API)
+  useEffect(() => {
+    const dataToUse = documentData || loadedDocumentData;
+    
+    if (dataToUse) {
       // Map the status label to its corresponding value
       const statutValue = statusOptions.find(
-        (option) => option.label === documentData.statut
+        (option) => option.label === dataToUse.status || option.label === dataToUse.statut
       )?.value;
 
       setFormData({
-        numePrenume: documentData.numePrenume || '',
-        continutConsultatie: documentData.domain_id || '',
-        dataApel: documentData.dataApel || new Date().toISOString().split('T')[0],
-        localitate: documentData.city_id || '',
-        persFizica: documentData.persFizica || false,
-        persJuridica: documentData.persJuridica || false,
-        agentEconomic: documentData.business_id || '',
-        categorieProdus: documentData.product_id || '',
-        categorieServiciu: documentData.service_id || '',
-        detalii: documentData.detalii || '',
+        numePrenume: dataToUse.name || dataToUse.numePrenume || '',
+        continutConsultatie: dataToUse.domain_id || '',
+        dataApel: dataToUse.dataApel || new Date().toISOString().split('T')[0],
+        localitate: dataToUse.city_id || '',
+        persFizica: dataToUse.persFizica || false,
+        persJuridica: dataToUse.persJuridica || false,
+        agentEconomic: dataToUse.business_id || '',
+        categorieProdus: dataToUse.product_id || '',
+        categorieServiciu: dataToUse.service_id || '',
+        detalii: dataToUse.details || dataToUse.detalii || '',
         statut: statutValue || 0, // Default to 0 (In Lucru) if status not found
       });
     }
-  }, [documentData]);
+  }, [documentData, loadedDocumentData, statusOptions]);
 
   // Handle input changes
   const handleChange = (e) => {

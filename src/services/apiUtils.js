@@ -39,6 +39,35 @@ export const getAuthHeaders = () => {
 };
 
 /**
+ * Process and format record URLs consistently
+ * @param {string} url - The raw record URL from the API
+ * @returns {string} - Properly formatted URL
+ */
+export const formatRecordUrl = (url) => {
+  if (!url) return null;
+  
+  // First remove carriage returns and trim whitespace
+  let cleanUrl = url.replace(/\r/g, '').trim();
+  
+  // Check if URL is already absolute (starts with http:// or https://)
+  if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+    // If it's a relative URL, append it to the API base URL
+    const baseUrl = config.api.baseUrl;
+    const baseWithoutApi = baseUrl.replace(/\/api\/?$/, ''); // Remove '/api' from the end if present
+    
+    // Add leading slash if needed
+    if (!cleanUrl.startsWith('/')) {
+      cleanUrl = '/' + cleanUrl;
+    }
+    
+    return `${baseWithoutApi}${cleanUrl}`;
+  }
+  
+  // If it's already an absolute URL, ensure it uses the configured domain
+  return getApiUrl(cleanUrl);
+};
+
+/**
  * Helper function to fetch all pages of paginated API data
  * @param {string} endpoint - API endpoint (without base URL)
  * @param {Object} options - Additional fetch options
