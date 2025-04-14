@@ -1,11 +1,15 @@
-import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom'; // Import useLocation to detect current route
+import React, { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useDocument } from '../contexts/DocumentContext';
 import './../App.css';
-const Header = ({ toggleSidebar }) => {
-  const location = useLocation(); // Get current route
-  const navigate = useNavigate(); // Hook for navigation
-  const { logout, user } = useAuth(); // Get auth context
+
+const Header = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { logout, user } = useAuth();
+  const { openDocumentModal } = useDocument();
+  const [searchFocused, setSearchFocused] = useState(false);
 
   // Determine page title based on current route
   const getTitle = () => {
@@ -18,74 +22,85 @@ const Header = ({ toggleSidebar }) => {
     if (location.pathname === '/domenii') return 'Domenii';
     if (location.pathname === '/servicii') return 'Servicii';
     if (location.pathname === '/agenti-economici') return 'Agenți Economici';
-    return 'Pagina necunoscută'; // Default fallback
+    
+    // Check if it's a document detail page
+    if (location.pathname.startsWith('/documents/')) return 'Detalii Document';
+    
+    return 'PBX CRM'; // Default fallback
   };
 
   return (
-    <div className="flex flex-wrap justify-between items-center mb-8 border-b-4 border-slate-100 p-4">
-      {/* Left side: Burger Menu (on mobile), Title, Search Icon (on mobile), and Ctrl K (only on desktop) */}
-      <div className="flex items-center space-x-4 md:mb-0">
-        {/* Burger Menu Icon for mobile */}
-        <button className="md:hidden" onClick={toggleSidebar}>
-          <span className="material-icons text-gray-500 cursor-pointer">menu</span>
-        </button>
-
-        {/* Dynamic Page Title */}
-        <h1 className="text-2xl font-bold">{getTitle()}</h1>
-
-        {/* Search input for desktop, Search icon for mobile */}
-        <div className="hidden md:block">
-          <input
-            type="text"
-            placeholder="Căutare..."
-            className="border rounded p-2 w-64"
-          />
-        </div>
-        <div className="md:hidden">
-          <span className="material-icons text-gray-500 cursor-pointer">search</span>
+    <header className="sticky top-0 z-30 bg-white shadow-sm">
+      <div className="flex items-center justify-between px-4 py-3 lg:px-6">
+        {/* Left section: Page title & breadcrumbs */}
+        <div className="flex items-center">
+          <div className="flex flex-col">
+            <h1 className="text-xl font-bold text-gray-800 sm:text-2xl">{getTitle()}</h1>
+            <nav className="hidden text-sm text-gray-500 sm:block">
+              <ol className="flex items-center space-x-1">
+                <li className="flex items-center">
+                  <span>PBX CRM</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </li>
+                <li className="text-indigo-600 font-medium">{getTitle()}</li>
+              </ol>
+            </nav>
+          </div>
         </div>
 
-        {/* Ctrl K button only visible on desktop */}
-        <button className="hidden md:block text-blue-500 p-2 border rounded">Ctrl K</button>
-      </div>
-
-      {/* Right side: Notifications, Document Icon, User Info, Logout */}
-      <div className="flex items-center space-x-4">
-        <div className="relative notificari">
-          <span className="material-icons text-gray-500">notifications</span>
-        </div>
-
-        {/* Full "Document Nou" button on desktop, Icon button on mobile */}
-        <button 
-          onClick={() => navigate('/new-document')}
-          className="bg-blue-500 text-white py-2 px-4 rounded hidden md:flex items-center"
-        >
-          Document Nou
-        </button>
-        <button 
-          className="bg-blue-500 text-white p-2 rounded-full flex md:hidden" 
-          onClick={() => navigate('/new-document')}
-        >
-          <span className="material-icons">add</span>
-        </button>
-        
-        {/* User info and logout */}
-        <div className="flex items-center space-x-2 border-l pl-4">
-          {user && (
-            <div className="hidden md:block text-sm text-gray-700">
-              {user.name || 'Utilizator'}
+        {/* Center: Search Bar (expands on focus for mobile) */}
+        <div className={`relative mx-auto transition-all duration-300 ${
+          searchFocused ? 'flex-grow max-w-2xl z-10' : 'w-auto max-w-xs'
+        }`}>
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Căutare..."
+              className={`pl-10 pr-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 ${
+                searchFocused ? 'w-full shadow-md' : 'w-48 lg:w-64'
+              }`}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+            />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
             </div>
-          )}
+            <div className="absolute inset-y-0 right-0 pr-3 hidden sm:flex items-center text-sm text-gray-500">
+              <span className="bg-gray-200 px-1.5 py-0.5 rounded font-mono">⌘K</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right section: Actions */}
+        <div className="flex items-center space-x-1 sm:space-x-3">
+          {/* New Document Button */}
           <button 
-            onClick={logout}
-            className="text-red-500 hover:text-red-700"
-            title="Deconectare"
+            onClick={openDocumentModal}
+            className="hidden sm:flex items-center justify-center px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-medium rounded-md hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 shadow-sm btn-hover-effect"
           >
-            <span className="material-icons">logout</span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Document Nou
+          </button>
+          
+          {/* Mobile Document Button */}
+          <button 
+            onClick={openDocumentModal}
+            className="sm:hidden flex items-center justify-center p-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-sm btn-hover-effect"
+            aria-label="Document Nou"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
           </button>
         </div>
       </div>
-    </div>
+    </header>
   );
 };
 

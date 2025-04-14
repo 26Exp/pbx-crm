@@ -2,11 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import EditDocumentModal from './EditDocumentModal';
-import * as XLSX from 'xlsx'; // ✅ Import for Excel export
+import * as XLSX from 'xlsx';
 import { getApiUrl, getAuthHeaders, fetchAllPages } from '../services/apiUtils';
 import config from '../config';
 import apiService from '../services/api';
-
 
 
 
@@ -268,238 +267,299 @@ const DocumentTable = () => {
   }, []);
 
   return (
-    <div className="p-4">
+    <div>
       {/* Display error messages */}
       {errors.length > 0 && (
-        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
+        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg border border-red-200">
           <ul className="list-disc pl-5">
             {errors.map((err, index) => (
-              <li key={index}>{err}</li>
+              <li key={index} className="text-sm">{err}</li>
             ))}
           </ul>
         </div>
       )}
 
       {/* Filtering and search section */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-4 bg-gray-100 p-4 rounded-lg">
-        {/* Search Input */}
-        <div className="mb-2 md:mb-0">
-          <input
-            type="text"
-            placeholder="Căutare după agent economic ..."
-            className="border p-2 rounded w-full md:w-64"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="flex space-x-4 mb-2 md:mb-0">
-          {/* Tip persoană Filter */}
-          <div className="relative dropdown">
-            <button
-              className="border px-4 py-2 rounded-lg"
-              onClick={() => setIsPersonTypeMenuOpen(!isPersonTypeMenuOpen)}
-            >
-              Tip persoană
-            </button>
-            {isPersonTypeMenuOpen && (
-              <div className="absolute bg-white border mt-2 p-2 rounded-lg shadow-lg w-40 z-10">
-                <ul className="space-y-2">
-                  <li
-                    className="cursor-pointer py-1 text-center hover:bg-gray-200"
-                    onClick={() => handlePersonTypeFilter('Pers. Fizică')}
-                  >
-                    Pers. Fizică
-                  </li>
-                  <li
-                    className="cursor-pointer py-1 text-center hover:bg-gray-200"
-                    onClick={() => handlePersonTypeFilter('Pers. Juridică')}
-                  >
-                    Pers. Juridică
-                  </li>
-                  <li
-                    className="cursor-pointer py-1 text-center hover:bg-gray-200"
-                    onClick={() => handlePersonTypeFilter('')}
-                  >
-                    Toate
-                  </li>
-                </ul>
-               
-              </div>
-              
-            )}
+      <div className="mb-6 px-5 py-4 border-b border-gray-200">
+        <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
+          {/* Search Input */}
+          <div className="relative w-full md:w-80">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder="Căutare agent economic..."
+              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-          {/* Statut Filter */}
-          <div className="relative dropdown">
+
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Tip persoană Filter */}
+            <div className="relative dropdown">
+              <button
+                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                onClick={() => setIsPersonTypeMenuOpen(!isPersonTypeMenuOpen)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                <span>{selectedPersonType || 'Tip persoană'}</span>
+              </button>
+              {isPersonTypeMenuOpen && (
+                <div className="absolute right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg w-40 z-20 overflow-hidden">
+                  <div className="py-1">
+                    <button
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
+                      onClick={() => handlePersonTypeFilter('Pers. Fizică')}
+                    >
+                      Persoană Fizică
+                    </button>
+                    <button
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
+                      onClick={() => handlePersonTypeFilter('Pers. Juridică')}
+                    >
+                      Persoană Juridică
+                    </button>
+                    <button
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
+                      onClick={() => handlePersonTypeFilter('')}
+                    >
+                      Toate
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Statut Filter */}
+            <div className="relative dropdown">
+              <button
+                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                onClick={() => setIsStatusMenuOpen(!isStatusMenuOpen)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                <span>{selectedStatus || 'Statut'}</span>
+              </button>
+              {isStatusMenuOpen && (
+                <div className="absolute right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg w-44 z-20 overflow-hidden">
+                  <div className="py-1">
+                    <button 
+                      className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
+                      onClick={() => handleStatusFilter('In Lucru')}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>În Lucru</span>
+                    </button>
+                    <button 
+                      className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
+                      onClick={() => handleStatusFilter('Inchis')}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Închis</span>
+                    </button>
+                    <button 
+                      className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
+                      onClick={() => handleStatusFilter('')}
+                    >
+                      <span className="ml-6">Toate</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Sortează după dată */}
             <button
-              className="border px-4 py-2 rounded-lg"
-              onClick={() => setIsStatusMenuOpen(!isStatusMenuOpen)}
-            >
-              Statut
-            </button>
-            {isStatusMenuOpen && (
-              <div className="absolute bg-white border mt-2 p-2 rounded-lg shadow-lg w-40 z-10">
-                <ul className="space-y-2">
-                  <li
-                    className="cursor-pointer rounded-full bg-green-100 text-green-600 py-1 text-center hover:bg-green-200"
-                    onClick={() => handleStatusFilter('Inchis')}
-                  >
-                    Închis
-                  </li>
-                  <li
-                    className="cursor-pointer rounded-full bg-red-100 text-red-600 py-1 text-center hover:bg-red-200"
-                    onClick={() => handleStatusFilter('Respins')}
-                  >
-                    Respins
-                  </li>
-                  <li
-                    className="cursor-pointer rounded-full bg-blue-100 text-blue-600 py-1 text-center hover:bg-blue-200"
-                    onClick={() => handleStatusFilter('Rezolvat')}
-                  >
-                    Rezolvat
-                  </li>
-                  <li
-                    className="cursor-pointer rounded-full bg-gray-100 text-gray-600 py-1 text-center hover:bg-gray-200"
-                    onClick={() => handleStatusFilter('')}
-                  >
-                    Toate
-                  </li>
-                </ul>
-              </div>
-            )}
-          </div>
-          {/* Sortează după dată */}
-          <div className="relative">
-            <button
-              className="border px-4 py-2 rounded-lg"
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               onClick={() => handleSort('dataApel')}
             >
-              Sortează după dată{' '}
-              {sortConfig.key === 'dataApel' ? (sortConfig.direction === 'ascending' ? '↑' : '↓') : ''}
+              {sortConfig.key === 'dataApel' ? (
+                sortConfig.direction === 'ascending' ? 
+                '↑' : 
+                '↓'
+              ) : '↑'}
+              <span>Data apelului</span>
+            </button>
+
+            {/* Export Excel */}
+            <button
+              onClick={exportToExcel}
+              className="flex items-center gap-2 px-3 py-2 border border-green-200 bg-green-50 rounded-md text-sm font-medium text-green-700 hover:bg-green-100 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <span>Export Excel</span>
             </button>
           </div>
-           <div className=" md:mt-0">
-    <button
-      onClick={exportToExcel}
-      className="border px-4 py-2 rounded-lg"
-    >
-      Exportă Excel
-    </button>
-  </div>
         </div>
-        <div>{filteredDocuments.length} Documente</div>
+        
+        {/* Results count */}
+        <div className="mt-4 text-sm text-gray-500 font-medium">
+          {filteredDocuments.length} documente găsite
+        </div>
       </div>
 
       {/* Table section */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="py-2 px-4 border-b text-left">
+      <div className="overflow-x-auto -mx-4 sm:mx-0 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+        <table className="min-w-full bg-white divide-y divide-gray-200 table-fixed md:table-auto">
+          <thead>
+            <tr className="bg-gray-50">
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 <input
                   type="checkbox"
-                  className="cursor-pointer"
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                   checked={selectAll}
                   onChange={handleSelectAll}
                 />
               </th>
-              <th
-                className="py-2 px-4 border-b text-left cursor-pointer"
+              <th 
+                scope="col" 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                 onClick={() => handleSort('nr')}
               >
-                Nr.
-                {sortConfig.key === 'nr' ? (sortConfig.direction === 'ascending' ? ' ↑' : ' ↓') : ''}
+                <div className="flex items-center">
+                  <span>Nr.</span>
+                  {sortConfig.key === 'nr' && (
+                    sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'
+                  )}
+                </div>
               </th>
-              <th
-                className="py-2 px-4 border-b text-left cursor-pointer"
+              <th 
+                scope="col" 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                 onClick={() => handleSort('statut')}
               >
-                Statut
-                {sortConfig.key === 'statut' ? (sortConfig.direction === 'ascending' ? ' ↑' : ' ↓') : ''}
+                <div className="flex items-center">
+                  <span>Statut</span>
+                  {sortConfig.key === 'statut' && (
+                    sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'
+                  )}
+                </div>
               </th>
-              <th className="py-2 px-4 border-b text-left">Nume & Prenume</th>
-              <th className="py-2 px-4 border-b text-left">Domeniul Consultație</th>
-              <th
-                className="py-2 px-4 border-b text-left cursor-pointer"
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Nume & Prenume
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Domeniul Consultație
+              </th>
+              <th 
+                scope="col" 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                 onClick={() => handleSort('dataApel')}
               >
-                Data apelului
-                {sortConfig.key === 'dataApel' ? (sortConfig.direction === 'ascending' ? ' ↑' : ' ↓') : ''}
+                <div className="flex items-center">
+                  <span>Data Apelului</span>
+                  {sortConfig.key === 'dataApel' && (
+                    sortConfig.direction === 'ascending' ? ' ↑' : ' ↓'
+                  )}
+                </div>
               </th>
-              <th className="py-2 px-4 border-b text-left">Localitatea (CUATM)</th>
-              <th
-                className="py-2 px-4 border-b text-left cursor-pointer"
-                onClick={() => handleSort('persFizica')}
-              >
-                Pers. Fizică
-                {sortConfig.key === 'persFizica' ? (sortConfig.direction === 'ascending' ? ' ↑' : ' ↓') : ''}
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Localitatea
               </th>
-              <th
-                className="py-2 px-4 border-b text-left cursor-pointer"
-                onClick={() => handleSort('persJuridica')}
-              >
-                Pers. Juridică
-                {sortConfig.key === 'persJuridica' ? (sortConfig.direction === 'ascending' ? ' ↑' : ' ↓') : ''}
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Agent Economic
               </th>
-              <th className="py-2 px-4 border-b text-left">Agent economic / Denumire / IDNO</th>
-              <th className="py-2 px-4 border-b text-left">Categorie Informație</th>
-              <th className="py-2 px-4 border-b text-left">Detalii</th>
-              <th className="py-2 px-4 border-b text-left">
-                <span className="material-icons text-gray-500">settings</span>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Categorie Informație
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Acțiuni
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan="13" className="py-4 text-center">
-                  Încarcă...
+                <td colSpan="10" className="px-6 py-8 text-center">
+                  <div className="flex justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
+                  </div>
+                  <p className="mt-2 text-sm text-gray-500">Se încarcă datele...</p>
                 </td>
               </tr>
             ) : filteredDocuments.length > 0 ? (
               filteredDocuments.map((doc) => (
-                <tr key={doc.nr} className="hover:bg-gray-50">
-                  <td className="py-3 px-4 border-b">
+                <tr key={doc.nr} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <input
                       type="checkbox"
-                      className="cursor-pointer"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                       checked={selectedDocuments.includes(doc.nr)}
                       onChange={() => handleSelectDocument(doc.nr)}
                     />
                   </td>
-                  <td className="py-3 px-4 border-b">{doc.nr}</td>
-                  <td className="py-3 px-4 border-b">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    #{doc.nr}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <span
-                      className={`py-1 px-3 rounded-full text-sm ${
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         doc.statut === 'Inchis'
-                          ? 'bg-green-100 text-green-600'
-                          : doc.statut === 'Respins'
-                          ? 'bg-red-100 text-red-600'
-                          : 'bg-blue-100 text-blue-600'
+                          ? 'bg-green-100 text-green-800'
+                          : doc.statut === 'In Lucru'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-blue-100 text-blue-800'
                       }`}
                     >
+                      {doc.statut === 'Inchis' ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      )}
                       {doc.statut}
                     </span>
                   </td>
-                  <td className="py-3 px-4 border-b">{doc.numePrenume}</td>
-                  <td className="py-3 px-4 border-b">{doc.continutConsultatie}</td>
-                  <td className="py-3 px-4 border-b">{doc.dataApel}</td>
-                  <td className="py-3 px-4 border-b">{doc.localitate}</td>
-                  <td className="py-3 px-4 border-b">{doc.persFizica ? 'Da' : 'Nu'}</td>
-                  <td className="py-3 px-4 border-b">{doc.persJuridica ? 'Da' : 'Nu'}</td>
-                  <td className="py-3 px-4 border-b">{doc.agentEconomic}</td>
-                  <td className="py-3 px-4 border-b">{doc.categorieInformatie}</td>
-                  <td className="py-3 px-4 border-b">{doc.detalii}</td>
-                  <td className="py-3 px-4 border-b text-gray-600">
-                    <button onClick={() => setEditingDocument(doc)}>
-                      <span className="material-icons">edit</span>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {doc.numePrenume}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {doc.continutConsultatie}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {doc.dataApel}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {doc.localitate}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {doc.agentEconomic}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {doc.categorieInformatie}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button 
+                      onClick={() => setEditingDocument(doc)}
+                      className="text-indigo-600 hover:text-indigo-900 focus:outline-none focus:underline"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
                     </button>
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="13" className="py-4 text-center">
-                  Nu există documente de afișat.
+                <td colSpan="10" className="px-6 py-8 text-center">
+                  <p className="text-sm text-gray-500">Nu există documente care să corespundă criteriilor selectate.</p>
                 </td>
               </tr>
             )}

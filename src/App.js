@@ -16,16 +16,11 @@ import DomainsPage from './components/DomainsPage'; // Import DomainsPage
 import ServicesPage from './components/ServicesPage'; // Import ServicesPage
 import BusinessPage from './components/BusinessPage'; // Import BusinessPage
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { DocumentProvider } from './contexts/DocumentContext'; // Import DocumentProvider
 import { setUnauthorizedCallback } from './services/api';
 
 function App() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [documents, setDocuments] = useState([]); // Moved document state here
-
-  // Function to toggle sidebar visibility
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
 
   // Function to add a new document
   const addDocument = (newDoc) => {
@@ -38,19 +33,19 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <MainApp 
-          isSidebarOpen={isSidebarOpen} 
-          toggleSidebar={toggleSidebar} 
-          addDocument={addDocument} 
-          documents={documents}  // Pass documents and addDocument down
-        />
+        <DocumentProvider>
+          <MainApp 
+            addDocument={addDocument} 
+            documents={documents}  // Pass documents and addDocument down
+          />
+        </DocumentProvider>
       </AuthProvider>
     </Router>
   );
 }
 
 // Separate component to access the Router's useLocation and auth context
-function MainApp({ isSidebarOpen, toggleSidebar, addDocument, documents }) {
+function MainApp({ addDocument, documents }) {
   const location = useLocation();
   const { handleUnauthorized, isAuthenticated, loading } = useAuth();
   
@@ -83,10 +78,10 @@ function MainApp({ isSidebarOpen, toggleSidebar, addDocument, documents }) {
   return (
     <div className="min-h-screen flex">
       {/* Only render Sidebar and Header if not on the login page */}
-      {!isLoginPage && <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />}
-      <div className="flex-1 flex flex-col">
-        {!isLoginPage && <Header toggleSidebar={toggleSidebar} />}
-        <div className="flex-1 p-2">
+      {!isLoginPage && <Sidebar />}
+      <div className="flex-1 flex flex-col ml-72 min-h-screen bg-gray-50 max-w-full" id="content-wrapper">
+        {!isLoginPage && <Header />}
+        <div className="flex-1 p-1 sm:p-2 md:p-4 overflow-x-hidden">
           <Routes>
             <Route path="/" element={
                <RequireAuth>
@@ -107,15 +102,7 @@ function MainApp({ isSidebarOpen, toggleSidebar, addDocument, documents }) {
               </RequireAuth>
               } />
             
-            {/* NewDocumentForm as a separate page */}
-            <Route 
-              path="/new-document" 
-              element={
-                <RequireAuth>
-                  <NewDocumentForm addDocument={addDocument} />
-                </RequireAuth>
-            }  // Pass addDocument to the form
-            />
+            {/* NewDocumentForm page route removed - now using modal for document creation */}
 
             <Route exact path="/documents/:documentId" element={
               <RequireAuth>

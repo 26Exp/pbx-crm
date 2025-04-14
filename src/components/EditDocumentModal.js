@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../services/api';
-import { getApiUrl, getAuthHeaders, fetchAllPages } from '../services/apiUtils';
-import config from '../config';
 import SearchableSelect from './SearchableSelect';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, callId }) => {
   const [formData, setFormData] = useState({
     numePrenume: '',
     continutConsultatie: '',
-    dataApel: '',
+    dataApel: new Date().toISOString().split('T')[0], // Default to today
     localitate: '',
     persFizica: false,
     persJuridica: false,
@@ -16,7 +15,7 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
     categorieProdus: '',
     categorieServiciu: '',
     detalii: '',
-    status: 1, // Default status value
+    statut: 0, // Default to "In Lucru"
   });
 
   // Reference data state variables
@@ -30,20 +29,32 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState([]);
   const [success, setSuccess] = useState(false);
+  const [activeStep, setActiveStep] = useState(1);
+  
+  // Track form field errors
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // Status options mapping
   const statusOptions = [
-    { value: 1, label: 'Inchis' },
-    { value: 2, label: 'Respins' },
-    { value: 3, label: 'Rezolvat' },
+    { 
+      value: 0, 
+      label: 'In Lucru', 
+      color: 'bg-yellow-100 text-yellow-800 border-yellow-300', 
+      icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' 
+    },
+    { 
+      value: 1, 
+      label: 'Inchis', 
+      color: 'bg-green-100 text-green-800 border-green-300', 
+      icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' 
+    },
   ];
-
-  // We're now using the fetchAllPages utility from our apiUtils.js
 
   // Fetch reference data
   useEffect(() => {
     const fetchReferenceData = async () => {
       try {
+        setLoading(true);
         // Fetch all reference data concurrently using apiService
         const [
           citiesData,
@@ -67,6 +78,8 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
       } catch (err) {
         console.error(err);
         setErrors(['Eroare la încărcarea datelor. Vă rugăm să încercați din nou.']);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -77,14 +90,14 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
   useEffect(() => {
     if (documentData) {
       // Map the status label to its corresponding value
-      const statusValue = statusOptions.find(
+      const statutValue = statusOptions.find(
         (option) => option.label === documentData.statut
       )?.value;
 
       setFormData({
         numePrenume: documentData.numePrenume || '',
         continutConsultatie: documentData.domain_id || '',
-        dataApel: documentData.dataApel || '',
+        dataApel: documentData.dataApel || new Date().toISOString().split('T')[0],
         localitate: documentData.city_id || '',
         persFizica: documentData.persFizica || false,
         persJuridica: documentData.persJuridica || false,
@@ -92,7 +105,7 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
         categorieProdus: documentData.product_id || '',
         categorieServiciu: documentData.service_id || '',
         detalii: documentData.detalii || '',
-        status: statusValue || 1, // Default to 1 if status not found
+        statut: statutValue || 0, // Default to 0 (In Lucru) if status not found
       });
     }
   }, [documentData]);
@@ -110,10 +123,15 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
             : prevData[name]
           : value,
     }));
+    
+    // Clear error for this field when it's changed
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({
+        ...prev,
+        [name]: false
+      }));
+    }
   };
-  
-  // Track form field errors
-  const [fieldErrors, setFieldErrors] = useState({});
 
   // Validate form data
   const validateForm = () => {
@@ -126,69 +144,56 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
       categorieProdus,
       categorieServiciu,
       detalii,
-      status,
+      statut,
     } = formData;
 
-    const newErrors = [];
     const fieldErrorsObj = {};
 
     if (!numePrenume) {
-      newErrors.push('Vă rugăm să completați Nume și Prenume.');
       fieldErrorsObj.numePrenume = true;
     }
     
     if (!continutConsultatie) {
-      newErrors.push('Vă rugăm să selectați Domeniul Consultație.');
       fieldErrorsObj.continutConsultatie = true;
     }
     
     if (!dataApel) {
-      newErrors.push('Vă rugăm să selectați Data apelului.');
       fieldErrorsObj.dataApel = true;
     }
     
     if (!localitate) {
-      newErrors.push('Vă rugăm să selectați Localitatea (CUATM).');
       fieldErrorsObj.localitate = true;
     }
     
     if (!formData.persFizica && !formData.persJuridica) {
-      newErrors.push('Vă rugăm să selectați tipul persoanei (Fizică sau Juridică).');
       fieldErrorsObj.personType = true;
     }
     
     if (formData.persJuridica && !agentEconomic) {
-      newErrors.push('Vă rugăm să selectați Agent Economic pentru Persoană Juridică.');
       fieldErrorsObj.agentEconomic = true;
     }
     
-    if (!categorieProdus) {
-      newErrors.push('Vă rugăm să selectați Categorie Produs.');
+    // Verificăm dacă cel puțin unul dintre Produs sau Serviciu este completat
+    if (!categorieProdus && !categorieServiciu) {
       fieldErrorsObj.categorieProdus = true;
-    }
-    
-    if (!categorieServiciu) {
-      newErrors.push('Vă rugăm să selectați Categorie Serviciu.');
       fieldErrorsObj.categorieServiciu = true;
     }
     
     if (!detalii) {
-      newErrors.push('Vă rugăm să completați Detalii consultație.');
       fieldErrorsObj.detalii = true;
     }
     
-    if (!status) {
-      newErrors.push('Vă rugăm să selectați Statusul.');
-      fieldErrorsObj.status = true;
+    if (statut === undefined || statut === null) {
+      fieldErrorsObj.statut = true;
     }
 
-    if (newErrors.length > 0) {
-      setErrors(newErrors);
+    const hasErrors = Object.keys(fieldErrorsObj).length > 0;
+    
+    if (hasErrors) {
       setFieldErrors(fieldErrorsObj);
       return false;
     }
 
-    setErrors([]);
     setFieldErrors({});
     return true;
   };
@@ -202,7 +207,6 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
     }
   
     setLoading(true);
-    setErrors([]);
     setSuccess(false);
   
     // Map formData to API fields
@@ -214,7 +218,7 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
       product_id: formData.categorieProdus ? parseInt(formData.categorieProdus, 10) : null,
       service_id: formData.categorieServiciu ? parseInt(formData.categorieServiciu, 10) : null,
       details: formData.detalii,
-      status: parseInt(formData.status, 10),
+      status: parseInt(formData.statut, 10),
       name: formData.numePrenume,
     };
   
@@ -238,14 +242,21 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
       setSuccess(true);
       updateDocument(updatedDoc);
   
-      // Close the modal
-      onClose();
-  
-      // Reload the page after successful creation or update
-      window.location.reload();
+      // Close the modal after success
+      setTimeout(() => {
+        onClose();
+        // Reload the page after successful creation or update
+        window.location.reload();
+      }, 1200);
   
     } catch (err) {
       console.error(err);
+      // În loc să setăm eroarea centralizat, setăm un mesaj pentru fiecare câmp
+      const fieldErrorsObj = {};
+      Object.keys(formData).forEach(key => {
+        fieldErrorsObj[key] = true;
+      });
+      setFieldErrors(fieldErrorsObj);
     } finally {
       setLoading(false);
     }
@@ -279,306 +290,462 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, updateDocument, call
       name: item.name || item.title || item.label || 'Unnamed'
     }));
   };
+  
+  // Step navigation with validation
+  const goToNextStep = () => {
+    // Validăm câmpurile pentru pasul curent
+    const { numePrenume, continutConsultatie, dataApel, localitate } = formData;
+    const currentStepErrors = {};
+    
+    // Validare pentru pasul 1
+    if (activeStep === 1) {
+      if (!numePrenume) {
+        currentStepErrors.numePrenume = true;
+      }
+      
+      if (!continutConsultatie) {
+        currentStepErrors.continutConsultatie = true;
+      }
+      
+      if (!dataApel) {
+        currentStepErrors.dataApel = true;
+      }
+      
+      if (!localitate) {
+        currentStepErrors.localitate = true;
+      }
+      
+      if (!formData.persFizica && !formData.persJuridica) {
+        currentStepErrors.personType = true;
+      }
+    }
+    
+    // Validare pentru pasul 2 (doar pentru persoane juridice)
+    if (activeStep === 2 && formData.persJuridica) {
+      if (!formData.agentEconomic) {
+        currentStepErrors.agentEconomic = true;
+      }
+    }
+    
+    // Dacă există erori, le afișăm și nu permitem navigarea la următorul pas
+    if (Object.keys(currentStepErrors).length > 0) {
+      setFieldErrors(prev => ({ ...prev, ...currentStepErrors }));
+      return;
+    }
+    
+    // Dacă nu sunt erori, navigăm la următorul pas
+    if (activeStep < 3) {
+      setActiveStep(activeStep + 1);
+      // Resetăm erorile când trecem la următorul pas
+      setFieldErrors({});
+    }
+  };
+  
+  const goToPreviousStep = () => {
+    if (activeStep > 1) {
+      setActiveStep(activeStep - 1);
+    }
+  };
+
+  // Modal animation variants
+  const modalVariants = {
+    hidden: { opacity: 0, y: 50 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+    exit: { opacity: 0, y: 50, transition: { duration: 0.2 } }
+  };
+  
+  const getStepTitle = () => {
+    switch (activeStep) {
+      case 1: 
+        return "Date Apel";
+      case 2:
+        return formData.persJuridica ? "Agent Economic" : "Conținut Apel";
+      case 3:
+        return "Conținut Apel";
+      default:
+        return "Date Apel";
+    }
+  };
 
   return (
-    isOpen && (
-      <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg w-full max-w-2xl p-6 relative max-h-full overflow-y-auto">
-          <button
-            className="absolute top-2 right-2 text-gray-600 hover:text-gray-800"
-            onClick={onClose}
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <motion.div 
+            className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            variants={modalVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
           >
-            &times;
-          </button>
-          <h2 className="text-xl font-semibold mb-4">
-            {documentData ? 'Editare Document' : 'Creare Document'}
-          </h2>
-
-          {/* Display success or error messages */}
-          {success && (
-            <div className="mb-4 p-4 bg-green-100 text-green-700 rounded">
-              Documentul a fost {documentData ? 'actualizat' : 'creat'} cu succes!
+            {/* Header */}
+            <div className="flex justify-between items-center bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 rounded-t-lg">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                {documentData ? 'Editare Document' : 'Creare Document'} 
+                <span className="text-sm font-normal bg-white/20 px-2 py-1 rounded-full">
+                  Pasul {activeStep}/3: {getStepTitle()}
+                </span>
+              </h2>
+              <button
+                onClick={onClose}
+                className="text-white hover:bg-white/20 p-1 rounded-full transition-colors duration-200"
+                aria-label="Close"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-          )}
-          {errors.length > 0 && (
-            <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
-              <ul className="list-disc pl-5">
-                {errors.map((err, index) => (
-                  <li key={index}>{err}</li>
-                ))}
-              </ul>
+            
+            {/* Progress bar */}
+            <div className="w-full bg-gray-200 h-1">
+              <div 
+                className="bg-blue-500 h-1 transition-all duration-300 ease-in-out" 
+                style={{ width: `${(activeStep / 3) * 100}%` }}
+              ></div>
             </div>
-          )}
 
-          <form onSubmit={handleSubmit}>
-            {/* Scrollable content */}
-            <div className="max-h-[70vh] overflow-y-auto">
-              {/* Form fields */}
-              {/* 1. Date Apel Section */}
-              <div className="bg-sky-100 p-6 rounded-lg mb-6">
-                <h2 className="text-lg font-semibold mb-4">1. Date Apel</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Nume și Prenume */}
-                  <div>
-                    <label htmlFor="numePrenume" className="block mb-1">
-                      *Nume și Prenume
-                    </label>
-                    <input
-                      id="numePrenume"
-                      type="text"
-                      name="numePrenume"
-                      value={formData.numePrenume}
-                      onChange={handleChange}
-                      className="border rounded p-2 w-full"
-                      required
-                    />
-                  </div>
+            {/* Success Message */}
+            <div className="px-6 pt-4">
+              {success && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg flex items-center gap-2 animate-pulse">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Documentul a fost {documentData ? 'actualizat' : 'creat'} cu succes!</span>
+                </div>
+              )}
+            </div>
 
-                  {/* Domeniul Consultatie - searchable select */}
-                  <div>
-                    <SearchableSelect
-                      id="continutConsultatie"
-                      name="continutConsultatie"
-                      options={domains}
-                      value={formData.continutConsultatie}
-                      onChange={handleChange}
-                      placeholder="Selectați domeniul..."
-                      label="*Domeniul Consultație"
-                      required={true}
-                      error={fieldErrors.continutConsultatie}
-                    />
-                  </div>
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="px-6 pb-6">
+              <div className="max-h-[calc(80vh-160px)] overflow-y-auto py-4 px-2 custom-scrollbar">
+                {/* Step 1: Date Apel */}
+                {activeStep === 1 && (
+                  <div className="space-y-5">
+                    {/* Nume și Prenume */}
+                    <div className="form-group">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Nume și Prenume <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="numePrenume"
+                        value={formData.numePrenume}
+                        onChange={handleChange}
+                        className={`w-full px-3 py-2 border ${fieldErrors.numePrenume ? 'border-red-300 bg-red-50' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors`}
+                        placeholder="Introduceți numele și prenumele"
+                      />
+                      {fieldErrors.numePrenume && (
+                        <p className="mt-1 text-sm text-red-600">Acest câmp este obligatoriu</p>
+                      )}
+                    </div>
 
-                  {/* Data apelului */}
-                  <div>
-                    <label htmlFor="dataApel" className="block mb-1">
-                      *Data apelului
-                    </label>
-                    <input
-                      id="dataApel"
-                      type="date"
-                      name="dataApel"
-                      value={formData.dataApel}
-                      onChange={handleChange}
-                      className="border rounded p-2 w-full"
-                      required
-                    />
-                  </div>
+                    {/* Domeniul Consultatie */}
+                    <div className="form-group">
+                      <SearchableSelect
+                        id="continutConsultatie"
+                        name="continutConsultatie"
+                        options={domains}
+                        value={formData.continutConsultatie}
+                        onChange={handleChange}
+                        placeholder="Selectați domeniul..."
+                        label="Domeniul Consultație"
+                        required={true}
+                        error={fieldErrors.continutConsultatie}
+                      />
+                      {fieldErrors.continutConsultatie && (
+                        <p className="mt-1 text-sm text-red-600">Acest câmp este obligatoriu</p>
+                      )}
+                    </div>
 
-                  {/* Localitatea (CUATM) - searchable select */}
-                  <div>
-                    <SearchableSelect
-                      id="localitate"
-                      name="localitate"
-                      options={cities}
-                      value={formData.localitate}
-                      onChange={handleChange}
-                      placeholder="Selectați localitatea..."
-                      label="*Localitatea (CUATM)"
-                      required={true}
-                      error={fieldErrors.localitate}
-                    />
-                  </div>
+                    {/* Data apelului */}
+                    <div className="form-group">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Data apelului <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        name="dataApel"
+                        value={formData.dataApel}
+                        onChange={handleChange}
+                        className={`w-full px-3 py-2 border ${fieldErrors.dataApel ? 'border-red-300 bg-red-50' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors`}
+                      />
+                      {fieldErrors.dataApel && (
+                        <p className="mt-1 text-sm text-red-600">Selectați data apelului</p>
+                      )}
+                    </div>
 
-                  {/* Radio buttons for Person Type */}
-                  <div className="col-span-1">
-                    <div className="flex items-center justify-between border border-gray-300 rounded-[10px] p-2 hover:bg-blue-500 hover:text-white cursor-pointer">
-                      <label
-                        htmlFor="persFizica"
-                        className="flex items-center justify-between w-full cursor-pointer"
-                      >
-                        <span className="select-none">Persoană Fizică</span>
-                        <input
-                          id="persFizica"
-                          type="radio"
-                          name="personType"
-                          value="persFizica"
-                          checked={formData.persFizica}
-                          onChange={() => {
-                            setFormData((prevData) => ({
-                              ...prevData,
+                    {/* Localitatea (CUATM) */}
+                    <div className="form-group">
+                      <SearchableSelect
+                        id="localitate"
+                        name="localitate"
+                        options={cities}
+                        value={formData.localitate}
+                        onChange={handleChange}
+                        placeholder="Selectați localitatea..."
+                        label="Localitatea (CUATM)"
+                        required={true}
+                        error={fieldErrors.localitate}
+                      />
+                      {fieldErrors.localitate && (
+                        <p className="mt-1 text-sm text-red-600">Acest câmp este obligatoriu</p>
+                      )}
+                    </div>
+
+                    {/* Person Type */}
+                    <div className="form-group">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Tip Persoană <span className="text-red-500">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div
+                          className={`p-3 border ${fieldErrors.personType ? 'border-red-300' : 'border-gray-200'} ${
+                            formData.persFizica ? 'bg-blue-50 border-blue-300' : 'bg-white'
+                          } rounded-lg cursor-pointer hover:bg-blue-50 transition-colors`}
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
                               persFizica: true,
                               persJuridica: false,
-                              agentEconomic: '',
+                              agentEconomic: ''
                             }));
                           }}
-                          className="cursor-pointer"
-                        />
-                      </label>
-                    </div>
-                  </div>
-                  <div className="col-span-1">
-                    <div className="flex items-center justify-between border border-gray-300 rounded-[10px] p-2 hover:bg-blue-500 hover:text-white cursor-pointer">
-                      <label
-                        htmlFor="persJuridica"
-                        className="flex items-center justify-between w-full cursor-pointer"
-                      >
-                        <span className="select-none">Persoană Juridică</span>
-                        <input
-                          id="persJuridica"
-                          type="radio"
-                          name="personType"
-                          value="persJuridica"
-                          checked={formData.persJuridica}
-                          onChange={() => {
-                            setFormData((prevData) => ({
-                              ...prevData,
-                              persFizica: false,
-                              persJuridica: true,
-                            }));
-                          }}
-                          className="cursor-pointer"
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Radio buttons for Status */}
-                  <div className="col-span-2 mt-4">
-                    <label className="block mb-2">*Status</label>
-                    <div className="grid grid-cols-3 gap-4">
-                      {statusOptions.map((option) => (
-                        <div key={option.value} className="col-span-1">
-                          <div
-                            className={`flex items-center justify-between border border-gray-300 rounded-[10px] p-2 cursor-pointer ${
-                              parseInt(formData.status, 10) === option.value
-                                ? 'bg-blue-500 text-white'
-                                : 'hover:bg-blue-500 hover:text-white'
-                            }`}
-                            onClick={() => setFormData({ ...formData, status: option.value })}
-                          >
-                            <label
-                              htmlFor={`status-${option.value}`}
-                              className="flex items-center justify-between w-full cursor-pointer"
-                            >
-                              <span className="select-none">{option.label}</span>
-                              <input
-                                id={`status-${option.value}`}
-                                type="radio"
-                                name="status"
-                                value={option.value}
-                                checked={parseInt(formData.status, 10) === option.value}
-                                onChange={handleChange}
-                                className="cursor-pointer"
-                              />
-                            </label>
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <svg className="h-5 w-5 text-blue-600" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                <path d="M12 11a4 4 0 100-8 4 4 0 000 8zm0 2c-2.67 0-8 1.34-8 4v2a1 1 0 001 1h14a1 1 0 001-1v-2c0-2.66-5.33-4-8-4z" />
+                              </svg>
+                              <span className="text-sm font-medium">Persoană Fizică</span>
+                            </div>
+                            <div className={`h-4 w-4 rounded-full border ${
+                              formData.persFizica 
+                                ? 'border-blue-500 bg-blue-500' 
+                                : 'border-gray-300'
+                            }`}>
+                              {formData.persFizica && (
+                                <span className="flex items-center justify-center h-full text-white text-xs">✓</span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      ))}
+                        
+                        <div
+                          className={`p-3 border ${fieldErrors.personType ? 'border-red-300' : 'border-gray-200'} ${
+                            formData.persJuridica ? 'bg-blue-50 border-blue-300' : 'bg-white'
+                          } rounded-lg cursor-pointer hover:bg-blue-50 transition-colors`}
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              persFizica: false,
+                              persJuridica: true
+                            }));
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <svg className="h-5 w-5 text-blue-600" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z" />
+                              </svg>
+                              <span className="text-sm font-medium">Persoană Juridică</span>
+                            </div>
+                            <div className={`h-4 w-4 rounded-full border ${
+                              formData.persJuridica 
+                                ? 'border-blue-500 bg-blue-500' 
+                                : 'border-gray-300'
+                            }`}>
+                              {formData.persJuridica && (
+                                <span className="flex items-center justify-center h-full text-white text-xs">✓</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      {fieldErrors.personType && (
+                        <p className="mt-1 text-sm text-red-600">Selectați tipul persoanei</p>
+                      )}
+                    </div>
+
+                    {/* Status */}
+                    <div className="form-group">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Statut <span className="text-red-500">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {statusOptions.map(option => (
+                          <div
+                            key={option.value}
+                            className={`p-3 border ${fieldErrors.statut ? 'border-red-300' : 'border-gray-200'} ${
+                              parseInt(formData.statut, 10) === option.value ? option.color : 'bg-white'
+                            } rounded-lg cursor-pointer hover:bg-gray-50 transition-colors`}
+                            onClick={() => setFormData(prev => ({ ...prev, statut: option.value }))}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-2">
+                                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d={option.icon} />
+                                </svg>
+                                <span className="text-sm font-medium">{option.label}</span>
+                              </div>
+                              <div className={`h-4 w-4 rounded-full border ${
+                                parseInt(formData.statut, 10) === option.value
+                                  ? 'border-blue-500 bg-blue-500' 
+                                  : 'border-gray-300'
+                              }`}>
+                                {parseInt(formData.statut, 10) === option.value && (
+                                  <span className="flex items-center justify-center h-full text-white text-xs">✓</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {fieldErrors.statut && (
+                        <p className="mt-1 text-sm text-red-600">Selectați statutul</p>
+                      )}
                     </div>
                   </div>
-                </div>
+                )}
+
+                {/* Step 2: Agent Economic (only for persJuridica) */}
+                {activeStep === 2 && formData.persJuridica && (
+                  <div className="space-y-5 h-[50vh]">
+                    <div className="form-group h-full flex flex-col">
+                      <SearchableSelect
+                        id="agentEconomic"
+                        name="agentEconomic"
+                        options={businesses}
+                        value={formData.agentEconomic}
+                        onChange={handleChange}
+                        placeholder="Căutați după denumire sau IDNO..."
+                        label="Agent economic Denumire / IDNO"
+                        required={true}
+                        error={fieldErrors.agentEconomic}
+                      />
+                      {fieldErrors.agentEconomic && (
+                        <p className="mt-1 text-sm text-red-600">Acest câmp este obligatoriu</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 2/3: Conținut Apel */}
+                {((activeStep === 2 && !formData.persJuridica) || activeStep === 3) && (
+                  <div className="space-y-5">
+                    {/* Produs */}
+                    <div className="form-group">
+                      <SearchableSelect
+                        id="categorieProdus"
+                        name="categorieProdus"
+                        options={products}
+                        value={formData.categorieProdus}
+                        onChange={handleChange}
+                        placeholder="Căutați produs..."
+                        label="Produs (Obligatoriu produs sau serviciu)"
+                        required={false}
+                        error={fieldErrors.categorieProdus}
+                      />
+                    </div>
+
+                    {/* Serviciu */}
+                    <div className="form-group">
+                      <SearchableSelect
+                        id="categorieServiciu"
+                        name="categorieServiciu"
+                        options={services}
+                        value={formData.categorieServiciu}
+                        onChange={handleChange}
+                        placeholder="Căutați serviciu..."
+                        label="Serviciu (Obligatoriu produs sau serviciu)"
+                        required={false}
+                        error={fieldErrors.categorieServiciu}
+                      />
+                    </div>
+
+                    {/* Detalii consultație */}
+                    <div className="form-group">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Detalii consultație <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        name="detalii"
+                        value={formData.detalii}
+                        onChange={handleChange}
+                        rows={5}
+                        className={`w-full px-3 py-2 border ${fieldErrors.detalii ? 'border-red-300 bg-red-50' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors`}
+                        placeholder="Introduceți detalii despre consultație..."
+                      ></textarea>
+                      {fieldErrors.detalii && (
+                        <p className="mt-1 text-sm text-red-600">Acest câmp este obligatoriu</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* 2. Agent Economic Section */}
-              {formData.persJuridica && (
-                <div className="bg-sky-100 p-6 rounded-lg mb-6">
-                  <h2 className="text-lg font-semibold mb-4">2. Agent Economic</h2>
-                  <div>
-                    <SearchableSelect
-                      id="agentEconomic"
-                      name="agentEconomic"
-                      options={businesses}
-                      value={formData.agentEconomic}
-                      onChange={handleChange}
-                      placeholder="Căutați după denumire sau IDNO..."
-                      label="*Agent economic Denumire / IDNO"
-                      required={true}
-                      error={fieldErrors.agentEconomic}
-                    />
-                  </div>
+              {/* Footer with navigation controls */}
+              <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200">
+                <div>
+                  {documentData && (
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      className="text-red-500 hover:text-red-700 px-3 py-1 rounded transition-colors duration-200"
+                      disabled={loading}
+                    >
+                      Șterge
+                    </button>
+                  )}
                 </div>
-              )}
 
-              {/* 3. Detalii Apel Section */}
-              <div className="bg-sky-100 p-6 rounded-lg">
-                <h2 className="text-lg font-semibold mb-4">3. Conținut Apel</h2>
-                <div className="grid grid-cols-1 gap-4">
-                  {/* Categorie Produs - searchable select */}
-                  <div>
-                    <SearchableSelect
-                      id="categorieProdus"
-                      name="categorieProdus"
-                      options={products}
-                      value={formData.categorieProdus}
-                      onChange={handleChange}
-                      placeholder="Căutați produs..."
-                      label="A. Produs"
-                      required={true}
-                      error={fieldErrors.categorieProdus}
-                    />
-                  </div>
-
-                  {/* Categorie Serviciu - searchable select */}
-                  <div>
-                    <SearchableSelect
-                      id="categorieServiciu"
-                      name="categorieServiciu"
-                      options={services}
-                      value={formData.categorieServiciu}
-                      onChange={handleChange}
-                      placeholder="Căutați serviciu..."
-                      label="B. Serviciu"
-                      required={true}
-                      error={fieldErrors.categorieServiciu}
-                    />
-                  </div>
-
-                  {/* Detalii */}
-                  <div>
-                    <label htmlFor="detalii" className="block mb-1">
-                      *Detalii consultație
-                    </label>
-                    <textarea
-                      id="detalii"
-                      name="detalii"
-                      value={formData.detalii}
-                      onChange={handleChange}
-                      className="border rounded p-2 w-full"
-                      required
-                      placeholder="Introduceți detalii suplimentare..."
-                    />
-                  </div>
+                <div className="flex space-x-3">
+                  {activeStep > 1 && (
+                    <button
+                      type="button"
+                      onClick={goToPreviousStep}
+                      className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                      disabled={loading}
+                    >
+                      Înapoi
+                    </button>
+                  )}
+                  
+                  {(activeStep < 3 || (activeStep === 2 && !formData.persJuridica)) ? (
+                    <button
+                      type="button"
+                      onClick={goToNextStep}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                      disabled={loading}
+                    >
+                      Continuă
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      className={`px-4 py-2 rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors
+                        ${loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <span className="flex items-center justify-center">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Se salvează...
+                        </span>
+                      ) : 'Salvează Document'}
+                    </button>
+                  )}
                 </div>
               </div>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex justify-between mt-6">
-              {documentData && (
-                <button
-                  type="button"
-                  className="text-red-500"
-                  onClick={handleDelete}
-                  disabled={loading}
-                >
-                  Șterge
-                </button>
-              )}
-              <div>
-                <button
-                  type="button"
-                  className="text-gray-500 mr-4"
-                  onClick={onClose}
-                  disabled={loading}
-                >
-                  Anulează
-                </button>
-                <button
-                  type="submit"
-                  className={`bg-blue-500 text-white py-2 px-4 rounded ${
-                    loading ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                  disabled={loading}
-                >
-                  {loading ? 'Salvând...' : 'Salvează'}
-                </button>
-              </div>
-            </div>
-          </form>
+            </form>
+          </motion.div>
         </div>
-      </div>
-    )
+      )}
+    </AnimatePresence>
   );
 };
 
