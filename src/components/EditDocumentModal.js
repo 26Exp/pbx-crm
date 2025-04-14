@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import apiService from '../services/api';
 import SearchableSelect from './SearchableSelect';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
 const EditDocumentModal = ({ isOpen, onClose, documentData, documentId, updateDocument, callId, mode = 'create' }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     numePrenume: '',
     continutConsultatie: '',
@@ -110,6 +112,11 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, documentId, updateDo
 
     fetchDocumentData();
   }, [documentId, mode]);
+
+  // Log the user data to check structure
+  useEffect(() => {
+    console.log('Current user:', user);
+  }, [user]);
 
   // Initialize form data with document data (either passed directly or loaded from API)
   useEffect(() => {
@@ -715,7 +722,7 @@ const EditDocumentModal = ({ isOpen, onClose, documentData, documentId, updateDo
               {/* Footer with navigation controls */}
               <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200">
                 <div>
-                  {documentData && (
+                  {documentData && (user?.role !== 2 && user?.role !== '2') && (
                     <button
                       type="button"
                       onClick={handleDelete}
