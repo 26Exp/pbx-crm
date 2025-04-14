@@ -31,6 +31,7 @@ const getFetchOptions = (options = {}) => {
   const defaultOptions = {
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       ...(token ? { 'Authorization': `Bearer ${token}` } : {})
     }
   };
