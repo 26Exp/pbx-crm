@@ -42,12 +42,12 @@ const DocumentPage = ({ documents }) => {
         <h1 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6">Gestionare Documente</h1>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Stats Card 1 */}
-          <div className="bg-white rounded-lg shadow-sm p-5 border-l-4 border-blue-500 hover:shadow-md transition-shadow">
-            <div className="flex justify-between">
+          {/* Stats Card 1 - Total Documente */}
+          <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm border-l-4 border-blue-500 hover:shadow-md transition-shadow">
+            <div className="flex justify-between items-center">
               <div>
-                <p className="text-sm text-gray-500 font-medium">Total Documente</p>
-                <p className="text-2xl font-bold text-gray-800">
+                <h3 className="text-xs sm:text-sm text-gray-500 font-medium">Total Documente</h3>
+                <p className="text-xl sm:text-2xl font-bold">
                   {isLoading ? (
                     <span className="inline-block w-12 h-8 bg-gray-200 animate-pulse rounded"></span>
                   ) : (
@@ -55,18 +55,20 @@ const DocumentPage = ({ documents }) => {
                   )}
                 </p>
               </div>
-              <div className="bg-blue-100 p-3 rounded-full text-blue-500 text-xl">
-                📄
+              <div className="bg-blue-100 p-2 sm:p-3 rounded-full text-blue-700">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
               </div>
             </div>
           </div>
           
-          {/* Stats Card 2 */}
-          <div className="bg-white rounded-lg shadow-sm p-5 border-l-4 border-green-500 hover:shadow-md transition-shadow">
-            <div className="flex justify-between">
+          {/* Stats Card 2 - Documente Închise */}
+          <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm border-l-4 border-green-500 hover:shadow-md transition-shadow">
+            <div className="flex justify-between items-center">
               <div>
-                <p className="text-sm text-gray-500 font-medium">Documente Închise</p>
-                <p className="text-2xl font-bold text-gray-800">
+                <h3 className="text-xs sm:text-sm text-gray-500 font-medium">Documente Închise</h3>
+                <p className="text-xl sm:text-2xl font-bold">
                   {isLoading ? (
                     <span className="inline-block w-12 h-8 bg-gray-200 animate-pulse rounded"></span>
                   ) : (
@@ -74,18 +76,20 @@ const DocumentPage = ({ documents }) => {
                   )}
                 </p>
               </div>
-              <div className="bg-green-100 p-3 rounded-full text-green-500 text-xl">
-                ✅
+              <div className="bg-green-100 p-2 sm:p-3 rounded-full text-green-700">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
               </div>
             </div>
           </div>
           
-          {/* Stats Card 3 */}
-          <div className="bg-white rounded-lg shadow-sm p-5 border-l-4 border-yellow-500 hover:shadow-md transition-shadow">
-            <div className="flex justify-between">
+          {/* Stats Card 3 - În Lucru */}
+          <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm border-l-4 border-yellow-500 hover:shadow-md transition-shadow">
+            <div className="flex justify-between items-center">
               <div>
-                <p className="text-sm text-gray-500 font-medium">În Lucru</p>
-                <p className="text-2xl font-bold text-gray-800">
+                <h3 className="text-xs sm:text-sm text-gray-500 font-medium">În Lucru</h3>
+                <p className="text-xl sm:text-2xl font-bold">
                   {isLoading ? (
                     <span className="inline-block w-12 h-8 bg-gray-200 animate-pulse rounded"></span>
                   ) : (
@@ -93,8 +97,10 @@ const DocumentPage = ({ documents }) => {
                   )}
                 </p>
               </div>
-              <div className="bg-yellow-100 p-3 rounded-full text-yellow-500 text-xl">
-                ⏳
+              <div className="bg-yellow-100 p-2 sm:p-3 rounded-full text-yellow-700">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </div>
             </div>
           </div>
@@ -102,14 +108,14 @@ const DocumentPage = ({ documents }) => {
           {/* Stats Card 4 - Add Document Card */}
           <div 
             onClick={openDocumentModal}
-            className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg shadow-sm p-5 text-white hover:shadow-md transition-shadow cursor-pointer">
+            className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg shadow-sm p-3 sm:p-4 text-white hover:shadow-md transition-all duration-200 cursor-pointer">
             <div className="flex justify-between items-center h-full">
               <div>
-                <p className="text-sm font-medium">Adaugă Document Nou</p>
-                <p className="text-lg mt-1">Creează rapid</p>
+                <h3 className="text-xs sm:text-sm text-white/90 font-medium">Adaugă Document Nou</h3>
+                <p className="text-xl sm:text-2xl font-bold">Creează</p>
               </div>
-              <div className="bg-white/20 p-3 rounded-full text-white text-xl">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="bg-white/20 p-2 sm:p-3 rounded-full text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
               </div>
